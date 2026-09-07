@@ -7,11 +7,15 @@
     "core:default",
     "opener:default",
     "store:default",
+    "dialog:default",
+    "fs:default",
+    "fs:allow-read-file",
     {
       "identifier": "http:default",
       "allow": [
         { "url": "https://github.com/*" },
-        { "url": "https://*.githubusercontent.com/*" }
+        { "url": "https://*.githubusercontent.com/*" },
+        { "url": "https://uploads.github.com/*" }
       ]
     }
   ]

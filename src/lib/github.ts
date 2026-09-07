@@ -1,3 +1,5 @@
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+
 const GRAPHQL_ENDPOINT = "https://api.github.com/graphql";
 
 export class GithubApiError extends Error {
@@ -549,11 +551,14 @@ export interface IssueDetail {
   repoLabels: RepoLabel[];
   repoMilestones: RepoMilestone[];
   repoAssignableUsers: RepoUser[];
+  /** Legacy numeric repository id, required by GitHub's attachment upload endpoint. */
+  repositoryDatabaseId: number;
 }
 
 const ISSUE_DETAIL_QUERY = `
   query IssueDetail($owner: String!, $repo: String!, $number: Int!) {
     repository(owner: $owner, name: $repo) {
+      databaseId
       issue(number: $number) {
         id
         number
@@ -594,6 +599,7 @@ interface RawSubIssue {
 
 interface RawIssueDetailResponse {
   repository: {
+    databaseId: number;
     issue: {
       id: string;
       number: number;
@@ -647,6 +653,7 @@ export async function fetchIssueDetail(
     repoLabels: data.repository!.labels.nodes,
     repoMilestones: data.repository!.milestones.nodes,
     repoAssignableUsers: data.repository!.assignableUsers.nodes,
+    repositoryDatabaseId: data.repository!.databaseId,
   };
 }
 
@@ -889,6 +896,7 @@ export async function clearIssueFieldValue(token: string, issueId: string, field
 
 export interface RepoSummary {
   id: string;
+  databaseId: number;
   name: string;
 }
 
@@ -896,7 +904,7 @@ const ORG_REPOS_QUERY = `
   query OrgRepos($org: String!) {
     organization(login: $org) {
       repositories(first: 100, orderBy: { field: NAME, direction: ASC }) {
-        nodes { id name }
+        nodes { id databaseId name }
       }
     }
   }
@@ -1072,4 +1080,63 @@ export async function fetchIssueByNumber(
     throw new GithubApiError(`Issue #${number} non trovata in ${owner}/${repo}.`);
   }
   return { ...issue, repository: repo, repositoryOwner: owner };
+}
+
+// ---------------------------------------------------------------------------
+// Image attachments. GitHub has no public/documented API for this — this
+// calls the same undocumented endpoint the github.com web editor itself uses
+// for drag-and-drop image uploads. It works today and behaves exactly like a
+// native attachment (including on private repos), but it's an internal
+// implementation detail we don't control: GitHub could change or remove it
+// without notice.
+// ---------------------------------------------------------------------------
+
+function extractAttachmentUrl(data: unknown): string | null {
+  if (data && typeof data === "object") {
+    const obj = data as Record<string, unknown>;
+    const direct = obj.href ?? obj.url ?? (obj.asset as Record<string, unknown> | undefined)?.href;
+    if (typeof direct === "string") return direct;
+    for (const v of Object.values(obj)) {
+      if (typeof v === "string" && /^https?:\/\//.test(v)) return v;
+    }
+  }
+  return null;
+}
+
+export async function uploadImageAttachment(
+  token: string,
+  repositoryDatabaseId: number,
+  fileName: string,
+  contentType: string,
+  bytes: Uint8Array,
+): Promise<string> {
+  const params = new URLSearchParams({
+    name: fileName,
+    content_type: contentType,
+    repository_id: String(repositoryDatabaseId),
+  });
+
+  const res = await tauriFetch(`https://uploads.github.com/user-attachments/assets?${params.toString()}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      "Content-Type": contentType,
+    },
+    body: bytes,
+  });
+
+  if (!res.ok) {
+    throw new GithubApiError(
+      `Upload immagine non riuscito (${res.status}). Questo endpoint non è ufficiale e potrebbe essere cambiato lato GitHub.`,
+      res.status,
+    );
+  }
+
+  const data = await res.json();
+  const url = extractAttachmentUrl(data);
+  if (!url) {
+    throw new GithubApiError("Risposta inattesa dal servizio di upload immagini di GitHub.");
+  }
+  return url;
 }

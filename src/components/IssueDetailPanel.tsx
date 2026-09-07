@@ -29,6 +29,7 @@ import {
 import { colorStyle } from "../lib/colors";
 import MarkdownContent from "./MarkdownContent";
 import LabelChip from "./LabelChip";
+import ImageUploadButton from "./ImageUploadButton";
 import MentionTextarea from "./MentionTextarea";
 import SubIssuesSection from "./SubIssuesSection";
 import ExternalLink from "./ExternalLink";
@@ -362,17 +363,26 @@ export default function IssueDetailPanel({ token, org, issueRef, project, onClos
             <section>
               <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-neutral-500">Descrizione</h3>
               {editingBody ? (
-                <MentionTextarea
-                  autoFocus
-                  value={bodyDraft}
-                  onChange={setBodyDraft}
-                  onBlur={commitBody}
-                  users={detail.repoAssignableUsers}
-                  issues={issueCandidates}
-                  rows={10}
-                  placeholder="Nessuna descrizione"
-                  className="w-full rounded-lg border border-indigo-500 bg-neutral-900 px-3 py-2 text-sm outline-none"
-                />
+                <>
+                  <MentionTextarea
+                    autoFocus
+                    value={bodyDraft}
+                    onChange={setBodyDraft}
+                    onBlur={commitBody}
+                    users={detail.repoAssignableUsers}
+                    issues={issueCandidates}
+                    rows={10}
+                    placeholder="Nessuna descrizione"
+                    className="w-full rounded-lg border border-indigo-500 bg-neutral-900 px-3 py-2 text-sm outline-none"
+                  />
+                  <div className="mt-1.5">
+                    <ImageUploadButton
+                      token={token}
+                      repositoryDatabaseId={detail.repositoryDatabaseId}
+                      onInsert={(md) => setBodyDraft((prev) => (prev.trim() ? `${prev}\n\n${md}` : md))}
+                    />
+                  </div>
+                </>
               ) : bodyDraft.trim() ? (
                 <MarkdownContent
                   markdown={bodyDraft}
@@ -573,13 +583,20 @@ export default function IssueDetailPanel({ token, org, issueRef, project, onClos
                 placeholder="Scrivi un commento… (usa @ per menzionare, # per citare un'issue)"
                 className="mt-3 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm outline-none focus:border-indigo-500"
               />
-              <button
-                onClick={postComment}
-                disabled={postingComment || !commentDraft.trim()}
-                className="mt-2 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
-              >
-                {postingComment ? "Invio…" : "Commenta"}
-              </button>
+              <div className="mt-2 flex items-center gap-3">
+                <button
+                  onClick={postComment}
+                  disabled={postingComment || !commentDraft.trim()}
+                  className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
+                >
+                  {postingComment ? "Invio…" : "Commenta"}
+                </button>
+                <ImageUploadButton
+                  token={token}
+                  repositoryDatabaseId={detail.repositoryDatabaseId}
+                  onInsert={(md) => setCommentDraft((prev) => (prev.trim() ? `${prev}\n\n${md}` : md))}
+                />
+              </div>
             </section>
           </div>
         )}

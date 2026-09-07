@@ -24,6 +24,7 @@ import {
 } from "../lib/github";
 import MentionTextarea from "./MentionTextarea";
 import LabelChip from "./LabelChip";
+import ImageUploadButton from "./ImageUploadButton";
 
 interface Props {
   token: string;
@@ -257,6 +258,13 @@ export default function NewIssueModal({
             placeholder="Descrizione (opzionale)"
             className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm outline-none focus:border-indigo-500"
           />
+          <div className="mt-1.5">
+            <ImageUploadButton
+              token={token}
+              repositoryDatabaseId={repos.find((r) => r.id === repoId)?.databaseId ?? null}
+              onInsert={(md) => setBody((prev) => (prev.trim() ? `${prev}\n\n${md}` : md))}
+            />
+          </div>
         </label>
 
         {metadataLoading && <p className="mt-3 text-xs text-neutral-500">Carico assegnatari, label e milestone…</p>}
