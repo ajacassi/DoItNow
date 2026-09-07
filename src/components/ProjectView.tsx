@@ -1,10 +1,14 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectDetail, ProjectItem, IssueRef } from "../lib/github";
+import { parseIssueQuery, matchesIssueQuery } from "../lib/query";
+import { getProjectViewState, setProjectViewState, type SavedView } from "../lib/store";
 import ProjectTable from "./ProjectTable";
 import ProjectBoard from "./ProjectBoard";
 import IssueDetailPanel from "./IssueDetailPanel";
 import NewIssueModal from "./NewIssueModal";
 import LabelFilterSidebar from "./LabelFilterSidebar";
+import QueryInput from "./QueryInput";
+import SavedViewsBar from "./SavedViewsBar";
 
 interface Props {
   token: string;
@@ -26,6 +30,104 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
   const [showNewIssue, setShowNewIssue] = useState(false);
   const [showLabelFilter, setShowLabelFilter] = useState(false);
   const [selectedLabels, setSelectedLabels] = useState<Set<string>>(new Set());
+  const [queryText, setQueryText] = useState("");
+  const [views, setViews] = useState<SavedView[]>([]);
+  const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  // Load saved views + last filter state for this project, then restore them.
+  useEffect(() => {
+    setLoaded(false);
+    getProjectViewState(project.id).then((state) => {
+      setViews(state.views);
+      setQueryText(state.current.queryText);
+      setSelectedLabels(new Set(state.current.labels));
+      setView(state.current.viewMode);
+      setActiveViewId(state.current.activeViewId);
+      setLoaded(true);
+    });
+  }, [project.id]);
+
+  // While a saved view is active, keep it in sync with whatever filters are
+  // currently set — editing the query/labels/mode of an active view updates
+  // that view automatically, so switching away and back never discards it.
+  useEffect(() => {
+    if (!loaded || !activeViewId) return;
+    setViews((vs) => {
+      const idx = vs.findIndex((v) => v.id === activeViewId);
+      if (idx === -1) return vs;
+      const current = vs[idx];
+      const labels = Array.from(selectedLabels);
+      const sameLabels = current.labels.length === labels.length && current.labels.every((l) => selectedLabels.has(l));
+      if (current.queryText === queryText && current.viewMode === view && sameLabels) return vs;
+      const next = [...vs];
+      next[idx] = { ...current, queryText, labels, viewMode: view };
+      return next;
+    });
+  }, [loaded, activeViewId, queryText, selectedLabels, view]);
+
+  // Persist views + current filter state locally, debounced so fast typing doesn't hammer disk.
+  useEffect(() => {
+    if (!loaded) return;
+    const handle = setTimeout(() => {
+      setProjectViewState(project.id, {
+        views,
+        current: { queryText, labels: Array.from(selectedLabels), viewMode: view, activeViewId },
+      });
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [loaded, project.id, views, queryText, selectedLabels, view, activeViewId]);
+
+  // The debounced save above can be cancelled (by unmount, e.g. navigating back
+  // to the project picker, switching projects, or closing the window) before it
+  // ever fires, silently dropping the latest change. Mirror the latest state
+  // into a ref and flush it immediately whenever that happens, so nothing is lost.
+  const latestRef = useRef({ views, queryText, selectedLabels, view, activeViewId, loaded });
+  useEffect(() => {
+    latestRef.current = { views, queryText, selectedLabels, view, activeViewId, loaded };
+  });
+
+  useEffect(() => {
+    function flush() {
+      const s = latestRef.current;
+      if (!s.loaded) return;
+      setProjectViewState(project.id, {
+        views: s.views,
+        current: { queryText: s.queryText, labels: Array.from(s.selectedLabels), viewMode: s.view, activeViewId: s.activeViewId },
+      });
+    }
+    window.addEventListener("beforeunload", flush);
+    return () => {
+      flush();
+      window.removeEventListener("beforeunload", flush);
+    };
+  }, [project.id]);
+
+  const isAllActive = activeViewId === null && !queryText.trim() && selectedLabels.size === 0;
+
+  function applyView(v: SavedView | null) {
+    if (!v) {
+      setQueryText("");
+      setSelectedLabels(new Set());
+      setActiveViewId(null);
+      return;
+    }
+    setQueryText(v.queryText);
+    setSelectedLabels(new Set(v.labels));
+    setView(v.viewMode);
+    setActiveViewId(v.id);
+  }
+
+  function saveCurrentAsNewView(name: string) {
+    const newView: SavedView = { id: crypto.randomUUID(), name, queryText, labels: Array.from(selectedLabels), viewMode: view };
+    setViews((vs) => [...vs, newView]);
+    setActiveViewId(newView.id);
+  }
+
+  function deleteView(id: string) {
+    setViews((vs) => vs.filter((v) => v.id !== id));
+    if (activeViewId === id) setActiveViewId(null);
+  }
 
   function openItemDetail(item: ProjectItem) {
     if (item.repositoryOwner && item.repository && item.number != null) {
@@ -42,10 +144,24 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
     });
   }
 
-  const visibleProject: ProjectDetail =
-    selectedLabels.size === 0
-      ? project
-      : { ...project, items: project.items.filter((item) => item.labels.some((l) => selectedLabels.has(l.name))) };
+  const parsedQuery = useMemo(() => {
+    try {
+      return parseIssueQuery(queryText);
+    } catch {
+      return null;
+    }
+  }, [queryText]);
+
+  const visibleProject: ProjectDetail = useMemo(() => {
+    let items = project.items;
+    if (selectedLabels.size > 0) {
+      items = items.filter((item) => item.labels.some((l) => selectedLabels.has(l.name)));
+    }
+    if (queryText.trim()) {
+      items = items.filter((item) => matchesIssueQuery(parsedQuery, item, project));
+    }
+    return items === project.items ? project : { ...project, items };
+  }, [project, selectedLabels, queryText, parsedQuery]);
 
   function openNewIssue(statusId?: string) {
     setNewIssueStatusId(statusId ?? null);
@@ -111,6 +227,34 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
           </button>
         </div>
       </header>
+
+      <SavedViewsBar
+        views={views}
+        activeViewId={activeViewId}
+        isAllActive={isAllActive}
+        onApply={applyView}
+        onSaveNew={saveCurrentAsNewView}
+        onDelete={deleteView}
+      />
+
+      <div className="flex items-center gap-2 border-b border-neutral-800 px-8 py-2">
+        <QueryInput
+          value={queryText}
+          onChange={setQueryText}
+          project={project}
+          placeholder='es. label:bug or assignee:canada87 -status:"Done"'
+          className="w-96 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-100 outline-none focus:border-indigo-500"
+        />
+        {queryText && (
+          <button onClick={() => setQueryText("")} className="text-xs text-neutral-500 hover:text-neutral-300">
+            Cancella
+          </button>
+        )}
+        <div className="rounded-lg border border-neutral-800 bg-neutral-900/50 px-3 py-1.5 text-[11px] leading-relaxed text-neutral-500">
+          <span className="text-neutral-300">chiave:valore</span> · spazio = and · <span className="text-neutral-300">or</span> = oppure ·{" "}
+          <span className="text-neutral-300">-</span>nega · (raggruppa) · "virgolette" per spazi
+        </div>
+      </div>
 
       <div className="flex min-h-0 flex-1">
         {showLabelFilter && (

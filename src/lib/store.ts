@@ -50,3 +50,40 @@ export async function setLabelFolders(projectId: string, data: LabelFolders): Pr
   await store.set(`label_folders_${projectId}`, data);
   await store.save();
 }
+
+export interface SavedView {
+  id: string;
+  name: string;
+  queryText: string;
+  labels: string[];
+  viewMode: "table" | "board";
+}
+
+export interface ProjectFilterState {
+  queryText: string;
+  labels: string[];
+  viewMode: "table" | "board";
+  activeViewId: string | null;
+}
+
+export interface ProjectViewState {
+  views: SavedView[];
+  current: ProjectFilterState;
+}
+
+const EMPTY_VIEW_STATE: ProjectViewState = {
+  views: [],
+  current: { queryText: "", labels: [], viewMode: "table", activeViewId: null },
+};
+
+export async function getProjectViewState(projectId: string): Promise<ProjectViewState> {
+  const store = await getStore();
+  const data = await store.get<ProjectViewState>(`project_views_${projectId}`);
+  return data ?? EMPTY_VIEW_STATE;
+}
+
+export async function setProjectViewState(projectId: string, data: ProjectViewState): Promise<void> {
+  const store = await getStore();
+  await store.set(`project_views_${projectId}`, data);
+  await store.save();
+}
