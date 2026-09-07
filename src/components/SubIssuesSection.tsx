@@ -9,6 +9,7 @@ import {
 } from "../lib/github";
 import NewIssueModal from "./NewIssueModal";
 import IssuePicker from "./IssuePicker";
+import ExternalLink from "./ExternalLink";
 
 interface Props {
   token: string;
@@ -89,9 +90,9 @@ export default function SubIssuesSection({
                 </span>
               </button>
               <div className="flex shrink-0 items-center gap-2">
-                <a href={s.url} target="_blank" rel="noreferrer" className="text-xs text-neutral-600 hover:text-neutral-400">
+                <ExternalLink href={s.url} className="text-xs text-neutral-600 hover:text-neutral-400">
                   ↗
-                </a>
+                </ExternalLink>
                 <button onClick={() => unlink(s)} className="text-xs text-neutral-500 hover:text-neutral-200">
                   Scollega
                 </button>

@@ -2,6 +2,7 @@ import { load, type Store } from "@tauri-apps/plugin-store";
 
 const SETTINGS_FILE = "settings.json";
 const TOKEN_KEY = "github_token";
+const LAST_ORG_KEY = "last_org";
 
 let storePromise: Promise<Store> | null = null;
 
@@ -27,6 +28,18 @@ export async function setGithubToken(token: string): Promise<void> {
 export async function clearGithubToken(): Promise<void> {
   const store = await getStore();
   await store.delete(TOKEN_KEY);
+  await store.save();
+}
+
+export async function getLastOrg(): Promise<string | null> {
+  const store = await getStore();
+  const org = await store.get<string>(LAST_ORG_KEY);
+  return org ?? null;
+}
+
+export async function setLastOrg(org: string): Promise<void> {
+  const store = await getStore();
+  await store.set(LAST_ORG_KEY, org);
   await store.save();
 }
 
@@ -56,13 +69,13 @@ export interface SavedView {
   name: string;
   queryText: string;
   labels: string[];
-  viewMode: "table" | "board";
+  viewMode: "table" | "board" | "gantt";
 }
 
 export interface ProjectFilterState {
   queryText: string;
   labels: string[];
-  viewMode: "table" | "board";
+  viewMode: "table" | "board" | "gantt";
   activeViewId: string | null;
 }
 
@@ -85,5 +98,19 @@ export async function getProjectViewState(projectId: string): Promise<ProjectVie
 export async function setProjectViewState(projectId: string, data: ProjectViewState): Promise<void> {
   const store = await getStore();
   await store.set(`project_views_${projectId}`, data);
+  await store.save();
+}
+
+// Table column visibility is shared across all views of a project (not
+// per-view), per explicit user request.
+export async function getTableColumns(projectId: string): Promise<string[] | null> {
+  const store = await getStore();
+  const data = await store.get<string[]>(`table_columns_${projectId}`);
+  return data ?? null;
+}
+
+export async function setTableColumns(projectId: string, columns: string[]): Promise<void> {
+  const store = await getStore();
+  await store.set(`table_columns_${projectId}`, columns);
   await store.save();
 }

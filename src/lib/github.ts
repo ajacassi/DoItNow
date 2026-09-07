@@ -141,6 +141,9 @@ export interface ProjectItem {
   state: string | null;
   repository: string | null;
   repositoryOwner: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  closedAt: string | null;
   assignees: ProjectItemUser[];
   labels: ProjectItemLabel[];
   fields: Record<string, ItemFieldValue>;
@@ -261,6 +264,9 @@ const PROJECT_ITEMS_QUERY = `
                 repository { name owner { login } }
                 assignees(first: 6) { nodes { login avatarUrl } }
                 labels(first: 10) { nodes { name color } }
+                createdAt
+                updatedAt
+                closedAt
               }
               ... on PullRequest {
                 id
@@ -271,6 +277,9 @@ const PROJECT_ITEMS_QUERY = `
                 repository { name owner { login } }
                 assignees(first: 6) { nodes { login avatarUrl } }
                 labels(first: 10) { nodes { name color } }
+                createdAt
+                updatedAt
+                closedAt
               }
               ... on DraftIssue {
                 title
@@ -342,6 +351,9 @@ interface RawProjectItemsResponse {
             repository?: { name: string; owner: { login: string } };
             assignees?: { nodes: ProjectItemUser[] };
             labels?: { nodes: ProjectItemLabel[] };
+            createdAt?: string;
+            updatedAt?: string;
+            closedAt?: string | null;
           } | null;
         }>;
       };
@@ -449,6 +461,9 @@ export async function fetchProjectDetail(token: string, org: string, number: num
         state: content.state ?? null,
         repository: content.repository?.name ?? null,
         repositoryOwner: content.repository?.owner.login ?? null,
+        createdAt: content.createdAt ?? null,
+        updatedAt: content.updatedAt ?? null,
+        closedAt: content.closedAt ?? null,
         assignees: content.assignees?.nodes ?? [],
         labels: content.labels?.nodes ?? [],
         fields: fieldMap,

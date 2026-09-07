@@ -178,6 +178,9 @@ export default function NewIssueModal({
           state: created.state,
           repository: created.repository,
           repositoryOwner: created.repositoryOwner,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          closedAt: null,
           assignees: (metadata?.assignableUsers ?? [])
             .filter((u) => assigneeIds.includes(u.id))
             .map((u) => ({ login: u.login, avatarUrl: u.avatarUrl })),
@@ -243,6 +246,12 @@ export default function NewIssueModal({
             value={body}
             onChange={setBody}
             users={metadata?.assignableUsers ?? []}
+            issues={project.items
+              // "#123" resolves against the issue's own repository, so only
+              // offer issues from the repo picked above — a candidate from a
+              // different repo would silently reference the wrong issue there.
+              .filter((i) => i.contentType === "Issue" && i.number != null && i.repository === repos.find((r) => r.id === repoId)?.name)
+              .map((i) => ({ number: i.number!, title: i.title }))}
             rows={5}
             placeholder="Descrizione (opzionale)"
             className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm outline-none focus:border-indigo-500"

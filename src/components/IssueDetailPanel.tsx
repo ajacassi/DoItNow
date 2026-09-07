@@ -30,6 +30,7 @@ import { colorStyle } from "../lib/colors";
 import MarkdownContent from "./MarkdownContent";
 import MentionTextarea from "./MentionTextarea";
 import SubIssuesSection from "./SubIssuesSection";
+import ExternalLink from "./ExternalLink";
 
 interface Props {
   token: string;
@@ -58,6 +59,14 @@ export default function IssueDetailPanel({ token, org, issueRef, project, onClos
   // Sub-issue list won't have a matching entry here — project-field editing
   // is hidden in that case (see `projectItem &&` checks below).
   const projectItem = detail ? project.items.find((i) => i.contentId === detail.id) ?? null : null;
+
+  // "#123" always resolves against the repository the comment/issue lives in,
+  // so cross-repo candidates would silently link to the wrong issue there.
+  const issueCandidates = project.items
+    .filter(
+      (i) => i.contentType === "Issue" && i.number != null && i.contentId !== detail?.id && i.repository === issueRef.repository,
+    )
+    .map((i) => ({ number: i.number!, title: i.title }));
 
   useEffect(() => {
     let cancelled = false;
@@ -291,9 +300,9 @@ export default function IssueDetailPanel({ token, org, issueRef, project, onClos
           </span>
           <div className="flex items-center gap-3">
             {detail?.url && (
-              <a href={detail.url} target="_blank" rel="noreferrer" className="text-xs text-neutral-500 hover:text-neutral-300">
+              <ExternalLink href={detail.url} className="text-xs text-neutral-500 hover:text-neutral-300">
                 Apri su GitHub ↗
-              </a>
+              </ExternalLink>
             )}
             <button onClick={onClose} className="text-neutral-500 hover:text-neutral-200">
               ✕
@@ -358,6 +367,7 @@ export default function IssueDetailPanel({ token, org, issueRef, project, onClos
                   onChange={setBodyDraft}
                   onBlur={commitBody}
                   users={detail.repoAssignableUsers}
+                  issues={issueCandidates}
                   rows={10}
                   placeholder="Nessuna descrizione"
                   className="w-full rounded-lg border border-indigo-500 bg-neutral-900 px-3 py-2 text-sm outline-none"
@@ -367,6 +377,7 @@ export default function IssueDetailPanel({ token, org, issueRef, project, onClos
                   markdown={bodyDraft}
                   token={token}
                   onClick={() => setEditingBody(true)}
+                  onOpenIssueRef={(number) => onOpenIssue({ repositoryOwner: issueRef.repositoryOwner, repository: issueRef.repository, number })}
                   className="prose prose-invert prose-sm max-w-none cursor-text rounded-lg border border-transparent px-3 py-2 hover:border-neutral-800"
                 />
               ) : (
@@ -552,7 +563,12 @@ export default function IssueDetailPanel({ token, org, issueRef, project, onClos
                       <span>{c.author?.login ?? "sconosciuto"}</span>
                       <span>· {new Date(c.createdAt).toLocaleString("it-IT")}</span>
                     </div>
-                    <MarkdownContent markdown={c.body} token={token} className="prose prose-invert prose-sm max-w-none" />
+                    <MarkdownContent
+                      markdown={c.body}
+                      token={token}
+                      onOpenIssueRef={(number) => onOpenIssue({ repositoryOwner: issueRef.repositoryOwner, repository: issueRef.repository, number })}
+                      className="prose prose-invert prose-sm max-w-none"
+                    />
                   </div>
                 ))}
               </div>
@@ -560,8 +576,9 @@ export default function IssueDetailPanel({ token, org, issueRef, project, onClos
                 value={commentDraft}
                 onChange={setCommentDraft}
                 users={detail.repoAssignableUsers}
+                issues={issueCandidates}
                 rows={3}
-                placeholder="Scrivi un commento… (usa @ per menzionare)"
+                placeholder="Scrivi un commento… (usa @ per menzionare, # per citare un'issue)"
                 className="mt-3 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm outline-none focus:border-indigo-500"
               />
               <button

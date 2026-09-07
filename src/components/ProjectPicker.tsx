@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ProjectSummary } from "../lib/github";
 
 interface Props {
@@ -23,6 +23,17 @@ export default function ProjectPicker({
   onLogout,
 }: Props) {
   const [touched, setTouched] = useState(false);
+  // Once we already have a remembered/fetched org, show a compact summary
+  // instead of the input, with a way back into edit mode.
+  const [editingOrg, setEditingOrg] = useState(!org);
+
+  // Collapse into the compact view once a fetch resolves successfully — this
+  // covers both a manual search and the automatic fetch for a remembered org
+  // on startup (which happens outside this component, in the parent).
+  useEffect(() => {
+    if (!loading && !error && org.trim()) setEditingOrg(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,25 +52,42 @@ export default function ProjectPicker({
       </header>
 
       <main className="mx-auto max-w-3xl px-8 py-10">
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <input
-            value={org}
-            onChange={(e) => onOrgChange(e.target.value)}
-            placeholder="nome-organizzazione"
-            className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm outline-none focus:border-indigo-500"
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
-          >
-            {loading ? "Carico…" : "Cerca progetti"}
-          </button>
-        </form>
+        {editingOrg || !org ? (
+          <form onSubmit={handleSubmit} className="flex gap-2">
+            <input
+              autoFocus
+              value={org}
+              onChange={(e) => onOrgChange(e.target.value)}
+              placeholder="nome-organizzazione"
+              className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm outline-none focus:border-indigo-500"
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
+            >
+              {loading ? "Carico…" : "Cerca progetti"}
+            </button>
+          </form>
+        ) : (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-neutral-400">
+              Organizzazione: <span className="font-medium text-neutral-100">{org}</span>
+            </p>
+            <button
+              onClick={() => setEditingOrg(true)}
+              className="rounded-lg border border-neutral-800 px-3 py-1.5 text-xs text-neutral-300 transition hover:border-neutral-500"
+            >
+              Cambia organizzazione
+            </button>
+          </div>
+        )}
+
         {touched && !org.trim() && (
           <p className="mt-2 text-xs text-red-400">Inserisci il nome dell'organizzazione.</p>
         )}
         {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+        {loading && !editingOrg && <p className="mt-8 text-sm text-neutral-500">Carico i progetti…</p>}
 
         {projects.length > 0 && (
           <ul className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2">

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import TokenScreen from "./components/TokenScreen";
 import ProjectPicker from "./components/ProjectPicker";
 import ProjectView from "./components/ProjectView";
-import { getGithubToken, setGithubToken, clearGithubToken } from "./lib/store";
+import { getGithubToken, setGithubToken, clearGithubToken, getLastOrg, setLastOrg } from "./lib/store";
 import {
   fetchOrgProjects,
   fetchProjectDetail,
@@ -32,9 +32,18 @@ export default function App() {
   const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
 
   useEffect(() => {
-    getGithubToken().then((t) => {
+    getGithubToken().then(async (t) => {
       setToken(t);
-      setScreen(t ? { name: "picker" } : { name: "token" });
+      if (!t) {
+        setScreen({ name: "token" });
+        return;
+      }
+      setScreen({ name: "picker" });
+      const savedOrg = await getLastOrg();
+      if (savedOrg) {
+        setOrg(savedOrg);
+        await fetchProjectsForOrg(t, savedOrg);
+      }
     });
   }, []);
 
@@ -51,19 +60,24 @@ export default function App() {
     setScreen({ name: "picker" });
   }
 
-  async function handleFetchProjects() {
-    if (!token) return;
+  async function fetchProjectsForOrg(t: string, orgName: string) {
     setPickerLoading(true);
     setPickerError(null);
     try {
-      const result = await fetchOrgProjects(token, org.trim());
+      const result = await fetchOrgProjects(t, orgName);
       setProjects(result);
+      await setLastOrg(orgName);
     } catch (e) {
       setPickerError(e instanceof Error ? e.message : "Errore sconosciuto");
       setProjects([]);
     } finally {
       setPickerLoading(false);
     }
+  }
+
+  async function handleFetchProjects() {
+    if (!token || !org.trim()) return;
+    await fetchProjectsForOrg(token, org.trim());
   }
 
   async function openProject(p: ProjectSummary) {

@@ -1,14 +1,20 @@
 import { useState } from "react";
-import type { ProjectDetail, ProjectItem } from "../lib/github";
+import type { ProjectDetail, ProjectField, ProjectItem, ItemFieldValue } from "../lib/github";
 import { groupItemsByStatus } from "../lib/github";
 import { colorStyle } from "../lib/colors";
+import { ASSIGNEE_COLUMN, CREATED_COLUMN, UPDATED_COLUMN, CLOSED_COLUMN, availableColumns } from "../lib/columns";
 import SubIssueProgress from "./SubIssueProgress";
+import ExternalLink from "./ExternalLink";
 
 interface Props {
   project: ProjectDetail;
+  columns: string[];
   onOpenItem: (item: ProjectItem) => void;
   onNewIssueForStatus: (statusOptionId: string) => void;
+  onMoveItem: (itemId: string, statusOptionId: string, statusName: string) => void;
 }
+
+const DRAG_MIME = "application/x-doitnow-item-id";
 
 function ChevronIcon({ open }: { open: boolean }) {
   return (
@@ -70,24 +76,67 @@ function NameCell({ item, onOpenItem }: { item: ProjectItem; onOpenItem: (item: 
       ))}
       {item.subIssuesSummary && <SubIssueProgress summary={item.subIssuesSummary} />}
       {item.url && (
-        <a href={item.url} target="_blank" rel="noreferrer" className="shrink-0 text-xs text-neutral-600 hover:text-neutral-400">
+        <ExternalLink href={item.url} className="shrink-0 text-xs text-neutral-600 hover:text-neutral-400">
           ↗
-        </a>
+        </ExternalLink>
       )}
     </div>
   );
 }
 
-export default function ProjectTable({ project, onOpenItem, onNewIssueForStatus }: Props) {
+function AssigneeCell({ item }: { item: ProjectItem }) {
+  if (item.assignees.length === 0) return <span className="text-neutral-700">—</span>;
+  return (
+    <div className="flex -space-x-1.5">
+      {item.assignees.map((a) => (
+        <img key={a.login} src={a.avatarUrl} title={a.login} alt={a.login} className="h-5 w-5 rounded-full border border-neutral-900" />
+      ))}
+    </div>
+  );
+}
+
+function DateCell({ iso }: { iso: string | null }) {
+  if (!iso) return <span className="text-neutral-700">—</span>;
+  return <span className="text-xs text-neutral-300">{new Date(iso).toLocaleDateString("it-IT")}</span>;
+}
+
+function FieldCell({ field, value }: { field: ProjectField; value: ItemFieldValue | undefined }) {
+  if (field.dataType === "DATE") {
+    const dateStr = value?.type === "date" ? value.date : null;
+    if (!dateStr) return <CalendarIcon className="h-4 w-4 text-neutral-700" />;
+    const overdue = isOverdue(dateStr);
+    return <span className={`text-xs ${overdue ? "text-red-400" : "text-neutral-300"}`}>{new Date(dateStr).toLocaleDateString("it-IT")}</span>;
+  }
+  if (field.dataType === "SINGLE_SELECT") {
+    if (value?.type !== "singleSelect") return <FlagIcon className="h-4 w-4 text-neutral-700" />;
+    const style = colorStyle(value.color);
+    return (
+      <span className={`inline-flex items-center gap-1 text-xs ${style.text}`}>
+        <FlagIcon className="h-3.5 w-3.5" />
+        {value.name}
+      </span>
+    );
+  }
+  if (field.dataType === "NUMBER") {
+    return value?.type === "number" ? <span className="text-xs text-neutral-300">{value.number}</span> : <span className="text-neutral-700">—</span>;
+  }
+  return value?.type === "text" ? (
+    <span className="truncate text-xs text-neutral-300">{value.text}</span>
+  ) : (
+    <span className="text-neutral-700">—</span>
+  );
+}
+
+export default function ProjectTable({ project, columns: visibleColumns, onOpenItem, onNewIssueForStatus, onMoveItem }: Props) {
   const columns = groupItemsByStatus(project);
   const optionColor = new Map(project.statusOptions.map((o) => [o.name, o.color]));
   const optionId = new Map(project.statusOptions.map((o) => [o.name, o.id]));
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
 
-  const dateField = project.fields.find((f) => f.dataType === "DATE");
-  const priorityField =
-    project.fields.find((f) => f.dataType === "SINGLE_SELECT" && /priorit/i.test(f.name)) ??
-    project.fields.find((f) => f.dataType === "SINGLE_SELECT");
+  const fieldByName = new Map(project.fields.map((f) => [f.name, f]));
+  const columnLabel = new Map(availableColumns(project).map((o) => [o.key, o.label]));
+  const gridTemplateColumns = `minmax(0,1fr) repeat(${visibleColumns.length}, 130px)`;
 
   function toggle(status: string) {
     setCollapsed((c) => ({ ...c, [status]: !c[status] }));
@@ -99,8 +148,26 @@ export default function ProjectTable({ project, onOpenItem, onNewIssueForStatus 
         {Array.from(columns.entries()).map(([status, items]) => {
           const style = colorStyle(optionColor.get(status));
           const isCollapsed = collapsed[status];
+          const targetOptionId = optionId.get(status);
+          const isDragOver = dragOverStatus === status;
           return (
-            <div key={status}>
+            <div
+              key={status}
+              onDragOver={(e) => {
+                if (!targetOptionId) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                setDragOverStatus(status);
+              }}
+              onDragLeave={() => setDragOverStatus((s) => (s === status ? null : s))}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOverStatus(null);
+                const itemId = e.dataTransfer.getData(DRAG_MIME);
+                if (itemId && targetOptionId) onMoveItem(itemId, targetOptionId, status);
+              }}
+              className={`rounded-lg transition ${isDragOver ? "ring-2 ring-indigo-500" : ""}`}
+            >
               <div className="flex items-center gap-2 py-2">
                 <button onClick={() => toggle(status)} className="flex items-center gap-2 text-left">
                   <ChevronIcon open={!isCollapsed} />
@@ -110,9 +177,9 @@ export default function ProjectTable({ project, onOpenItem, onNewIssueForStatus 
                   </span>
                   <span className="text-xs text-neutral-600">{items.length}</span>
                 </button>
-                {optionId.get(status) && (
+                {targetOptionId && (
                   <button
-                    onClick={() => onNewIssueForStatus(optionId.get(status)!)}
+                    onClick={() => onNewIssueForStatus(targetOptionId)}
                     title={`Nuova issue in ${status}`}
                     className="text-neutral-600 hover:text-neutral-300"
                   >
@@ -123,64 +190,46 @@ export default function ProjectTable({ project, onOpenItem, onNewIssueForStatus 
 
               {!isCollapsed && items.length > 0 && (
                 <div className="overflow-hidden rounded-lg border border-neutral-800">
-                  <div className="grid grid-cols-[1fr_120px_120px_140px] border-b border-neutral-800 bg-neutral-900/60 text-xs font-medium text-neutral-500">
+                  <div
+                    className="grid border-b border-neutral-800 bg-neutral-900/60 text-xs font-medium text-neutral-500"
+                    style={{ gridTemplateColumns }}
+                  >
                     <span className="px-3 py-2">Nome</span>
-                    <span className="px-3 py-2">Assegnatario</span>
-                    <span className="px-3 py-2">{dateField?.name ?? "Data"}</span>
-                    <span className="px-3 py-2">{priorityField?.name ?? "Priorità"}</span>
+                    {visibleColumns.map((key) => (
+                      <span key={key} className="truncate px-3 py-2">
+                        {columnLabel.get(key) ?? key}
+                      </span>
+                    ))}
                   </div>
-                  {items.map((item) => {
-                    const dateValue = dateField ? item.fields[dateField.name] : undefined;
-                    const priorityValue = priorityField ? item.fields[priorityField.name] : undefined;
-                    const dateStr = dateValue?.type === "date" ? dateValue.date : null;
-                    const overdue = dateStr ? isOverdue(dateStr) : false;
-                    const prioStyle = priorityValue?.type === "singleSelect" ? colorStyle(priorityValue.color) : null;
-
-                    return (
-                      <div
-                        key={item.id}
-                        className="grid grid-cols-[1fr_120px_120px_140px] items-center border-b border-neutral-800/60 last:border-b-0 hover:bg-neutral-900/40"
-                      >
-                        <NameCell item={item} onOpenItem={onOpenItem} />
-                        <div className="px-3 py-2">
-                          {item.assignees.length > 0 ? (
-                            <div className="flex -space-x-1.5">
-                              {item.assignees.map((a) => (
-                                <img
-                                  key={a.login}
-                                  src={a.avatarUrl}
-                                  title={a.login}
-                                  alt={a.login}
-                                  className="h-5 w-5 rounded-full border border-neutral-900"
-                                />
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-neutral-700">—</span>
-                          )}
+                  {items.map((item) => (
+                    <div
+                      key={item.id}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData(DRAG_MIME, item.id);
+                        e.dataTransfer.effectAllowed = "move";
+                      }}
+                      className="grid cursor-grab items-center border-b border-neutral-800/60 last:border-b-0 hover:bg-neutral-900/40 active:cursor-grabbing"
+                      style={{ gridTemplateColumns }}
+                    >
+                      <NameCell item={item} onOpenItem={onOpenItem} />
+                      {visibleColumns.map((key) => (
+                        <div key={key} className="min-w-0 px-3 py-2">
+                          {key === ASSIGNEE_COLUMN ? (
+                            <AssigneeCell item={item} />
+                          ) : key === CREATED_COLUMN ? (
+                            <DateCell iso={item.createdAt} />
+                          ) : key === UPDATED_COLUMN ? (
+                            <DateCell iso={item.updatedAt} />
+                          ) : key === CLOSED_COLUMN ? (
+                            <DateCell iso={item.closedAt} />
+                          ) : fieldByName.get(key) ? (
+                            <FieldCell field={fieldByName.get(key)!} value={item.fields[key]} />
+                          ) : null}
                         </div>
-                        <div className="px-3 py-2">
-                          {dateStr ? (
-                            <span className={`text-xs ${overdue ? "text-red-400" : "text-neutral-300"}`}>
-                              {new Date(dateStr).toLocaleDateString("it-IT")}
-                            </span>
-                          ) : (
-                            <CalendarIcon className="h-4 w-4 text-neutral-700" />
-                          )}
-                        </div>
-                        <div className="px-3 py-2">
-                          {prioStyle ? (
-                            <span className={`inline-flex items-center gap-1 text-xs ${prioStyle.text}`}>
-                              <FlagIcon className="h-3.5 w-3.5" />
-                              {priorityValue?.type === "singleSelect" ? priorityValue.name : ""}
-                            </span>
-                          ) : (
-                            <FlagIcon className="h-4 w-4 text-neutral-700" />
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                      ))}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

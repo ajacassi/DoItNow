@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectDetail, ProjectItem, IssueRef } from "../lib/github";
+import { setProjectFieldSingleSelect } from "../lib/github";
 import { parseIssueQuery, matchesIssueQuery } from "../lib/query";
-import { getProjectViewState, setProjectViewState, type SavedView } from "../lib/store";
+import { getProjectViewState, setProjectViewState, getTableColumns, setTableColumns, type SavedView } from "../lib/store";
+import { defaultColumns, orderColumns } from "../lib/columns";
 import ProjectTable from "./ProjectTable";
 import ProjectBoard from "./ProjectBoard";
+import ProjectGantt from "./ProjectGantt";
 import IssueDetailPanel from "./IssueDetailPanel";
 import NewIssueModal from "./NewIssueModal";
 import LabelFilterSidebar from "./LabelFilterSidebar";
 import QueryInput from "./QueryInput";
 import SavedViewsBar from "./SavedViewsBar";
+import ColumnPicker from "./ColumnPicker";
 
 interface Props {
   token: string;
@@ -21,7 +25,7 @@ interface Props {
   onItemAdded: (item: ProjectItem) => void;
 }
 
-type ViewMode = "table" | "board";
+type ViewMode = "table" | "board" | "gantt";
 
 export default function ProjectView({ token, org, project, onBack, onRefresh, refreshing, onItemChange, onItemAdded }: Props) {
   const [view, setView] = useState<ViewMode>("table");
@@ -33,6 +37,7 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
   const [queryText, setQueryText] = useState("");
   const [views, setViews] = useState<SavedView[]>([]);
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => new Set(defaultColumns(project)));
   const [loaded, setLoaded] = useState(false);
 
   // Load saved views + last filter state for this project, then restore them.
@@ -47,6 +52,25 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
       setLoaded(true);
     });
   }, [project.id]);
+
+  // Table column visibility is one setting shared by every view of this
+  // project (not per-view), loaded/saved separately from the view state above.
+  useEffect(() => {
+    getTableColumns(project.id).then((cols) => {
+      setVisibleColumns(new Set(cols?.length ? cols : defaultColumns(project)));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id]);
+
+  function toggleColumn(key: string) {
+    setVisibleColumns((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      setTableColumns(project.id, Array.from(next));
+      return next;
+    });
+  }
 
   // While a saved view is active, keep it in sync with whatever filters are
   // currently set — editing the query/labels/mode of an active view updates
@@ -168,6 +192,18 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
     setShowNewIssue(true);
   }
 
+  async function moveItemToStatus(itemId: string, statusOptionId: string, statusName: string) {
+    if (!project.statusFieldId) return;
+    const previousStatus = project.items.find((i) => i.id === itemId)?.status;
+    if (previousStatus === statusName) return;
+    onItemChange(itemId, { status: statusName });
+    try {
+      await setProjectFieldSingleSelect(token, project.id, itemId, project.statusFieldId, statusOptionId);
+    } catch {
+      if (previousStatus) onItemChange(itemId, { status: previousStatus });
+    }
+  }
+
   return (
     <div className="flex h-screen w-full flex-col bg-neutral-950 text-neutral-100">
       <header className="flex items-center justify-between border-b border-neutral-800 px-8 py-4">
@@ -200,6 +236,7 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
               </span>
             )}
           </button>
+          {view === "table" && <ColumnPicker project={project} selected={visibleColumns} onToggle={toggleColumn} />}
           <div className="flex rounded-lg border border-neutral-800 p-0.5 text-xs">
             <button
               onClick={() => setView("table")}
@@ -216,6 +253,14 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
               }`}
             >
               Board
+            </button>
+            <button
+              onClick={() => setView("gantt")}
+              className={`rounded-md px-3 py-1 transition ${
+                view === "gantt" ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300"
+              }`}
+            >
+              Gantt
             </button>
           </div>
           <button
@@ -266,11 +311,24 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
             onClear={() => setSelectedLabels(new Set())}
           />
         )}
-        <main className="min-h-0 flex-1">
+        <main className="min-h-0 min-w-0 flex-1">
           {view === "table" ? (
-            <ProjectTable project={visibleProject} onOpenItem={openItemDetail} onNewIssueForStatus={openNewIssue} />
+            <ProjectTable
+              project={visibleProject}
+              columns={orderColumns(project, visibleColumns)}
+              onOpenItem={openItemDetail}
+              onNewIssueForStatus={openNewIssue}
+              onMoveItem={moveItemToStatus}
+            />
+          ) : view === "board" ? (
+            <ProjectBoard
+              project={visibleProject}
+              onOpenItem={openItemDetail}
+              onNewIssueForStatus={openNewIssue}
+              onMoveItem={moveItemToStatus}
+            />
           ) : (
-            <ProjectBoard project={visibleProject} onOpenItem={openItemDetail} onNewIssueForStatus={openNewIssue} />
+            <ProjectGantt project={visibleProject} onOpenItem={openItemDetail} />
           )}
         </main>
       </div>
