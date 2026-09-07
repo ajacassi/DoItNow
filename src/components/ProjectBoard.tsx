@@ -4,6 +4,7 @@ import { groupItemsByStatus } from "../lib/github";
 import { colorStyle } from "../lib/colors";
 import SubIssueProgress from "./SubIssueProgress";
 import ExternalLink from "./ExternalLink";
+import LabelChip from "./LabelChip";
 
 interface Props {
   project: ProjectDetail;
@@ -24,7 +25,7 @@ function ItemCard({ item, onOpenItem }: { item: ProjectItem; onOpenItem: (item: 
         e.dataTransfer.setData(DRAG_MIME, item.id);
         e.dataTransfer.effectAllowed = "move";
       }}
-      className="cursor-grab rounded-lg border border-neutral-800 bg-neutral-900 p-3 transition hover:border-neutral-700 active:cursor-grabbing"
+      className="cursor-grab rounded-2xl border border-neutral-800/80 bg-neutral-900 p-3.5 shadow-sm shadow-black/20 transition hover:-translate-y-0.5 hover:border-neutral-700 hover:shadow-md hover:shadow-black/30 active:cursor-grabbing"
     >
       <div className="flex items-start justify-between gap-2">
         {canOpenDetail ? (
@@ -43,19 +44,9 @@ function ItemCard({ item, onOpenItem }: { item: ProjectItem; onOpenItem: (item: 
       </div>
 
       {item.labels.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
           {item.labels.map((l) => (
-            <span
-              key={l.name}
-              className="rounded-full px-2 py-0.5 text-[10px] font-medium"
-              style={{
-                backgroundColor: `#${l.color}33`,
-                color: `#${l.color}`,
-                border: `1px solid #${l.color}66`,
-              }}
-            >
-              {l.name}
-            </span>
+            <LabelChip key={l.name} name={l.name} color={l.color} />
           ))}
         </div>
       )}
@@ -116,7 +107,7 @@ export default function ProjectBoard({ project, onOpenItem, onNewIssueForStatus,
               const itemId = e.dataTransfer.getData(DRAG_MIME);
               if (itemId && targetOptionId) onMoveItem(itemId, targetOptionId, status);
             }}
-            className={`flex w-72 shrink-0 flex-col rounded-xl bg-neutral-900/40 transition ${
+            className={`flex w-72 shrink-0 flex-col rounded-2xl bg-neutral-900/40 transition ${
               isDragOver ? "ring-2 ring-indigo-500" : ""
             }`}
           >

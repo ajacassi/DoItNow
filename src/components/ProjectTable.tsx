@@ -5,6 +5,7 @@ import { colorStyle } from "../lib/colors";
 import { ASSIGNEE_COLUMN, CREATED_COLUMN, UPDATED_COLUMN, CLOSED_COLUMN, availableColumns } from "../lib/columns";
 import SubIssueProgress from "./SubIssueProgress";
 import ExternalLink from "./ExternalLink";
+import LabelChip from "./LabelChip";
 
 interface Props {
   project: ProjectDetail;
@@ -62,17 +63,7 @@ function NameCell({ item, onOpenItem }: { item: ProjectItem; onOpenItem: (item: 
         <span className="min-w-0 truncate text-sm text-neutral-100">{item.title}</span>
       )}
       {item.labels.map((l) => (
-        <span
-          key={l.name}
-          className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium"
-          style={{
-            backgroundColor: `#${l.color}33`,
-            color: `#${l.color}`,
-            border: `1px solid #${l.color}66`,
-          }}
-        >
-          {l.name}
-        </span>
+        <LabelChip key={l.name} name={l.name} color={l.color} />
       ))}
       {item.subIssuesSummary && <SubIssueProgress summary={item.subIssuesSummary} />}
       {item.url && (

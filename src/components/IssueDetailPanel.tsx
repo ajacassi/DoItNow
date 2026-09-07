@@ -28,6 +28,7 @@ import {
 } from "../lib/github";
 import { colorStyle } from "../lib/colors";
 import MarkdownContent from "./MarkdownContent";
+import LabelChip from "./LabelChip";
 import MentionTextarea from "./MentionTextarea";
 import SubIssuesSection from "./SubIssuesSection";
 import ExternalLink from "./ExternalLink";
@@ -441,16 +442,7 @@ export default function IssueDetailPanel({ token, org, issueRef, project, onClos
               <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-neutral-500">Label</h3>
               <div className="flex flex-wrap gap-1.5">
                 {detail.labels.map((l) => (
-                  <span
-                    key={l.id}
-                    className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
-                    style={{ backgroundColor: `#${l.color}33`, color: `#${l.color}`, border: `1px solid #${l.color}66` }}
-                  >
-                    {l.name}
-                    <button onClick={() => removeLabel(l.id)} className="opacity-70 hover:opacity-100">
-                      ×
-                    </button>
-                  </span>
+                  <LabelChip key={l.id} name={l.name} color={l.color} onRemove={() => removeLabel(l.id)} />
                 ))}
               </div>
               <select

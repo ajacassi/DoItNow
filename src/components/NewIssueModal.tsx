@@ -23,6 +23,7 @@ import {
   type CreatedIssue,
 } from "../lib/github";
 import MentionTextarea from "./MentionTextarea";
+import LabelChip from "./LabelChip";
 
 interface Props {
   token: string;
@@ -342,16 +343,7 @@ export default function NewIssueModal({
                   const l = metadata.labels.find((x) => x.id === id);
                   if (!l) return null;
                   return (
-                    <span
-                      key={id}
-                      className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
-                      style={{ backgroundColor: `#${l.color}33`, color: `#${l.color}`, border: `1px solid #${l.color}66` }}
-                    >
-                      {l.name}
-                      <button onClick={() => setLabelIds((ids) => ids.filter((x) => x !== id))} className="opacity-70 hover:opacity-100">
-                        ×
-                      </button>
-                    </span>
+                    <LabelChip key={id} name={l.name} color={l.color} onRemove={() => setLabelIds((ids) => ids.filter((x) => x !== id))} />
                   );
                 })}
               </div>
