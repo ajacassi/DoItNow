@@ -29,11 +29,12 @@ interface Props {
   refreshing: boolean;
   onItemChange: (itemId: string, patch: Partial<ProjectItem>) => void;
   onItemAdded: (item: ProjectItem) => void;
+  onItemRemoved: (itemId: string) => void;
 }
 
 type ViewMode = "table" | "board" | "gantt";
 
-export default function ProjectView({ token, org, project, onBack, onRefresh, refreshing, onItemChange, onItemAdded }: Props) {
+export default function ProjectView({ token, org, project, onBack, onRefresh, refreshing, onItemChange, onItemAdded, onItemRemoved }: Props) {
   const [view, setView] = useState<ViewMode>("table");
   const [openIssueRef, setOpenIssueRef] = useState<IssueRef | null>(null);
   const [newIssueStatusId, setNewIssueStatusId] = useState<string | null>(null);
@@ -381,6 +382,7 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
           onClose={() => setOpenIssueRef(null)}
           onItemChange={onItemChange}
           onItemAdded={onItemAdded}
+          onItemRemoved={onItemRemoved}
           onOpenIssue={setOpenIssueRef}
         />
       )}

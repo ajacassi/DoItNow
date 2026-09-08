@@ -20,6 +20,7 @@ import {
   setIssueFieldText,
   setIssueFieldNumber,
   clearIssueFieldValue,
+  removeItemFromProject,
   GithubApiError,
   type IssueDetail,
   type ProjectDetail,
@@ -42,10 +43,21 @@ interface Props {
   onClose: () => void;
   onItemChange: (itemId: string, patch: Partial<ProjectItem>) => void;
   onItemAdded: (item: ProjectItem) => void;
+  onItemRemoved: (itemId: string) => void;
   onOpenIssue: (ref: IssueRef) => void;
 }
 
-export default function IssueDetailPanel({ token, org, issueRef, project, onClose, onItemChange, onItemAdded, onOpenIssue }: Props) {
+export default function IssueDetailPanel({
+  token,
+  org,
+  issueRef,
+  project,
+  onClose,
+  onItemChange,
+  onItemAdded,
+  onItemRemoved,
+  onOpenIssue,
+}: Props) {
   const [detail, setDetail] = useState<IssueDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -287,6 +299,15 @@ export default function IssueDetailPanel({ token, org, issueRef, project, onClos
     }
   }
 
+  async function unlinkProject(link: { itemId: string; projectId: string }) {
+    if (!detail) return;
+    await guarded(async () => {
+      await removeItemFromProject(token, link.projectId, link.itemId);
+      setDetail({ ...detail, projectItems: detail.projectItems.filter((p) => p.itemId !== link.itemId) });
+      if (link.itemId === projectItem?.id) onItemRemoved(link.itemId);
+    });
+  }
+
   const editableFields = project.fields.filter((f) => ["SINGLE_SELECT", "DATE", "TEXT", "NUMBER"].includes(f.dataType));
   const statusStyle = colorStyle(project.statusOptions.find((o) => o.name === projectItem?.status)?.color);
 
@@ -298,7 +319,7 @@ export default function IssueDetailPanel({ token, org, issueRef, project, onClos
       >
         <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-3">
           <span className="text-xs text-neutral-500">
-            {issueRef.repository} #{issueRef.number}
+            {issueRef.repositoryOwner}/{issueRef.repository} #{issueRef.number}
           </span>
           <div className="flex items-center gap-3">
             {detail?.url && (
@@ -354,6 +375,10 @@ export default function IssueDetailPanel({ token, org, issueRef, project, onClos
                   ))}
                 </select>
               )}
+
+              <span className="rounded-full border border-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-400">
+                {issueRef.repositoryOwner}/{issueRef.repository}
+              </span>
             </div>
 
             {!projectItem && (
@@ -537,6 +562,31 @@ export default function IssueDetailPanel({ token, org, issueRef, project, onClos
                       </label>
                     );
                   })}
+                </div>
+              </section>
+            )}
+
+            {detail.projectItems.length > 0 && (
+              <section>
+                <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-neutral-500">Progetti collegati</h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {detail.projectItems.map((p) => (
+                    <span
+                      key={p.itemId}
+                      className={`flex items-center gap-1 rounded-full py-0.5 pl-2 pr-1.5 text-xs ${
+                        p.projectId === project.id ? "bg-indigo-950/60 text-indigo-300" : "bg-neutral-900 text-neutral-300"
+                      }`}
+                    >
+                      {p.projectTitle} <span className="opacity-60">#{p.projectNumber}</span>
+                      <button
+                        onClick={() => unlinkProject(p)}
+                        title={`Scollega da "${p.projectTitle}"`}
+                        className="text-current opacity-60 hover:opacity-100"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
                 </div>
               </section>
             )}

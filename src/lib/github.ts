@@ -604,6 +604,14 @@ export interface SubIssueSummary {
   repositoryOwner: string;
 }
 
+export interface IssueProjectLink {
+  /** ProjectV2Item id — needed to unlink this issue from that project. */
+  itemId: string;
+  projectId: string;
+  projectTitle: string;
+  projectNumber: number;
+}
+
 export interface IssueDetail {
   id: string;
   number: number;
@@ -619,6 +627,8 @@ export interface IssueDetail {
   repoLabels: RepoLabel[];
   repoMilestones: RepoMilestone[];
   repoAssignableUsers: RepoUser[];
+  /** Every project (v2) this issue is currently added to, not just the one currently open. */
+  projectItems: IssueProjectLink[];
   /** Legacy numeric repository id, required by GitHub's attachment upload endpoint. */
   repositoryDatabaseId: number;
 }
@@ -646,6 +656,12 @@ const ISSUE_DETAIL_QUERY = `
             state
             url
             repository { name owner { login } }
+          }
+        }
+        projectItems(first: 20) {
+          nodes {
+            id
+            project { id title number }
           }
         }
       }
@@ -680,6 +696,7 @@ interface RawIssueDetailResponse {
       labels: { nodes: RepoLabel[] };
       comments: { nodes: IssueComment[] };
       subIssues: { nodes: RawSubIssue[] };
+      projectItems: { nodes: Array<{ id: string; project: { id: string; title: string; number: number } }> };
     } | null;
     labels: { nodes: RepoLabel[] };
     milestones: { nodes: RepoMilestone[] };
@@ -721,8 +738,26 @@ export async function fetchIssueDetail(
     repoLabels: data.repository!.labels.nodes,
     repoMilestones: data.repository!.milestones.nodes,
     repoAssignableUsers: data.repository!.assignableUsers.nodes,
+    projectItems: issue.projectItems.nodes.map((p) => ({
+      itemId: p.id,
+      projectId: p.project.id,
+      projectTitle: p.project.title,
+      projectNumber: p.project.number,
+    })),
     repositoryDatabaseId: data.repository!.databaseId,
   };
+}
+
+export async function removeItemFromProject(token: string, projectId: string, itemId: string): Promise<void> {
+  await graphql(
+    token,
+    `mutation($projectId: ID!, $itemId: ID!) {
+      deleteProjectV2Item(input: { projectId: $projectId, itemId: $itemId }) {
+        deletedItemId
+      }
+    }`,
+    { projectId, itemId },
+  );
 }
 
 export async function updateIssueTitle(token: string, issueId: string, title: string): Promise<void> {

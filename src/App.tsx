@@ -126,6 +126,13 @@ export default function App() {
     });
   }
 
+  function removeItem(itemId: string) {
+    setScreen((s) => {
+      if (s.name !== "board") return s;
+      return { ...s, project: { ...s.project, items: s.project.items.filter((it) => it.id !== itemId) } };
+    });
+  }
+
   async function handleLogout() {
     await clearGithubToken();
     setToken(null);
@@ -152,6 +159,7 @@ export default function App() {
         refreshing={boardRefreshing}
         onItemChange={patchItem}
         onItemAdded={addItem}
+        onItemRemoved={removeItem}
       />
     );
   }
