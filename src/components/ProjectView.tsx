@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectDetail, ProjectItem, IssueRef } from "../lib/github";
-import { setProjectFieldSingleSelect } from "../lib/github";
+import { setProjectFieldSingleSelect, fetchRepoIssueCount } from "../lib/github";
 import { parseIssueQuery, matchesIssueQuery } from "../lib/query";
-import { getProjectViewState, setProjectViewState, getTableColumns, setTableColumns, type SavedView } from "../lib/store";
+import {
+  getProjectViewState,
+  setProjectViewState,
+  getTableColumns,
+  setTableColumns,
+  type SavedView,
+} from "../lib/store";
 import { defaultColumns, orderColumns } from "../lib/columns";
 import ProjectTable from "./ProjectTable";
 import ProjectBoard from "./ProjectBoard";
@@ -71,6 +77,31 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
       return next;
     });
   }
+
+  // Total issue count (all states) for the repo(s) actually linked to this
+  // project (project.linkedRepos, from its Settings > Repositories list) —
+  // NOT derived from item content, so a stray issue added to the project (or
+  // a sub-issue) from an unrelated repo never inflates the count.
+  const [repoIssueCount, setRepoIssueCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    const repos = project.linkedRepos;
+    if (repos.length === 0) {
+      setRepoIssueCount(null);
+      return;
+    }
+    let cancelled = false;
+    Promise.all(repos.map((r) => fetchRepoIssueCount(token, r.owner, r.name)))
+      .then((counts) => {
+        if (!cancelled) setRepoIssueCount(counts.reduce((a, b) => a + b, 0));
+      })
+      .catch(() => {
+        if (!cancelled) setRepoIssueCount(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, project.linkedRepos]);
 
   // While a saved view is active, keep it in sync with whatever filters are
   // currently set — editing the query/labels/mode of an active view updates
@@ -212,6 +243,14 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
             ← Progetti
           </button>
           <h1 className="text-lg font-semibold tracking-tight">{project.title}</h1>
+          {repoIssueCount !== null && (
+            <span
+              className="text-xs text-neutral-600"
+              title={project.linkedRepos.length > 1 ? project.linkedRepos.map((r) => `${r.owner}/${r.name}`).join(", ") : undefined}
+            >
+              {repoIssueCount} issue {project.linkedRepos.length > 1 ? "nei repo collegati" : "nel repo"}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-3">

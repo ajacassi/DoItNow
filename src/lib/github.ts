@@ -160,8 +160,94 @@ export interface ProjectDetail {
   fields: ProjectField[];
   /** Fields in `fields` that are actually Issue Fields (org-level) must be written via updateIssueFieldValue, keyed by field name. */
   issueFieldsByName: Record<string, IssueFieldDef>;
+  /** Repositories linked to this project via its own Settings > Repositories list (not derived from item content). */
+  linkedRepos: { owner: string; name: string }[];
   items: ProjectItem[];
 }
+
+const PROJECT_ITEM_FRAGMENT = `
+  fragment ProjectItemFields on ProjectV2Item {
+    id
+    fieldValues(first: 20) {
+      nodes {
+        __typename
+        ... on ProjectV2ItemFieldSingleSelectValue {
+          name
+          color
+          field {
+            ... on ProjectV2FieldCommon { name }
+          }
+        }
+        ... on ProjectV2ItemFieldDateValue {
+          date
+          field {
+            ... on ProjectV2FieldCommon { name }
+          }
+        }
+        ... on ProjectV2ItemFieldTextValue {
+          text
+          field {
+            ... on ProjectV2FieldCommon { name }
+          }
+        }
+        ... on ProjectV2ItemFieldNumberValue {
+          number
+          field {
+            ... on ProjectV2FieldCommon { name }
+          }
+        }
+        ... on ProjectV2ItemIssueFieldValue {
+          issueFieldValue {
+            __typename
+            ... on IssueFieldValueCommon {
+              field {
+                ... on IssueFieldCommon { name }
+              }
+            }
+            ... on IssueFieldTextValue { value }
+            ... on IssueFieldNumberValue { value }
+            ... on IssueFieldDateValue { value }
+            ... on IssueFieldSingleSelectValue { id name color }
+          }
+        }
+      }
+    }
+    content {
+      __typename
+      ... on Issue {
+        id
+        number
+        title
+        url
+        state
+        parent { id }
+        subIssuesSummary { total completed percentCompleted }
+        repository { name owner { login } }
+        assignees(first: 6) { nodes { login avatarUrl } }
+        labels(first: 10) { nodes { name color } }
+        createdAt
+        updatedAt
+        closedAt
+      }
+      ... on PullRequest {
+        id
+        number
+        title
+        url
+        state
+        repository { name owner { login } }
+        assignees(first: 6) { nodes { login avatarUrl } }
+        labels(first: 10) { nodes { name color } }
+        createdAt
+        updatedAt
+        closedAt
+      }
+      ... on DraftIssue {
+        title
+      }
+    }
+  }
+`;
 
 const PROJECT_ITEMS_QUERY = `
   query ProjectItems($org: String!, $number: Int!) {
@@ -206,92 +292,35 @@ const PROJECT_ITEMS_QUERY = `
             }
           }
         }
+        repositories(first: 20) {
+          nodes { name owner { login } }
+        }
         items(first: 100) {
+          pageInfo { hasNextPage endCursor }
           nodes {
-            id
-            fieldValues(first: 20) {
-              nodes {
-                __typename
-                ... on ProjectV2ItemFieldSingleSelectValue {
-                  name
-                  color
-                  field {
-                    ... on ProjectV2FieldCommon { name }
-                  }
-                }
-                ... on ProjectV2ItemFieldDateValue {
-                  date
-                  field {
-                    ... on ProjectV2FieldCommon { name }
-                  }
-                }
-                ... on ProjectV2ItemFieldTextValue {
-                  text
-                  field {
-                    ... on ProjectV2FieldCommon { name }
-                  }
-                }
-                ... on ProjectV2ItemFieldNumberValue {
-                  number
-                  field {
-                    ... on ProjectV2FieldCommon { name }
-                  }
-                }
-                ... on ProjectV2ItemIssueFieldValue {
-                  issueFieldValue {
-                    __typename
-                    ... on IssueFieldValueCommon {
-                      field {
-                        ... on IssueFieldCommon { name }
-                      }
-                    }
-                    ... on IssueFieldTextValue { value }
-                    ... on IssueFieldNumberValue { value }
-                    ... on IssueFieldDateValue { value }
-                    ... on IssueFieldSingleSelectValue { id name color }
-                  }
-                }
-              }
-            }
-            content {
-              __typename
-              ... on Issue {
-                id
-                number
-                title
-                url
-                state
-                parent { id }
-                subIssuesSummary { total completed percentCompleted }
-                repository { name owner { login } }
-                assignees(first: 6) { nodes { login avatarUrl } }
-                labels(first: 10) { nodes { name color } }
-                createdAt
-                updatedAt
-                closedAt
-              }
-              ... on PullRequest {
-                id
-                number
-                title
-                url
-                state
-                repository { name owner { login } }
-                assignees(first: 6) { nodes { login avatarUrl } }
-                labels(first: 10) { nodes { name color } }
-                createdAt
-                updatedAt
-                closedAt
-              }
-              ... on DraftIssue {
-                title
-              }
-            }
+            ...ProjectItemFields
           }
         }
       }
     }
   }
+  ${PROJECT_ITEM_FRAGMENT}
+`;
+
+const PROJECT_ITEMS_PAGE_QUERY = `
+  query ProjectItemsPage($org: String!, $number: Int!, $after: String!) {
+    organization(login: $org) {
+      projectV2(number: $number) {
+        items(first: 100, after: $after) {
+          pageInfo { hasNextPage endCursor }
+          nodes {
+            ...ProjectItemFields
+          }
+        }
+      }
+    }
+  }
+  ${PROJECT_ITEM_FRAGMENT}
 `;
 
 interface RawIssueFieldValue {
@@ -322,6 +351,32 @@ interface RawIssueFieldNode {
   options?: Array<{ id: string; name: string; color: string }>;
 }
 
+interface RawPageInfo {
+  hasNextPage: boolean;
+  endCursor: string | null;
+}
+
+interface RawProjectItemNode {
+  id: string;
+  fieldValues: { nodes: RawFieldValue[] };
+  content: {
+    __typename: "Issue" | "PullRequest" | "DraftIssue";
+    id?: string;
+    number?: number;
+    title: string;
+    url?: string;
+    state?: string;
+    parent?: { id: string } | null;
+    subIssuesSummary?: SubIssuesSummary | null;
+    repository?: { name: string; owner: { login: string } };
+    assignees?: { nodes: ProjectItemUser[] };
+    labels?: { nodes: ProjectItemLabel[] };
+    createdAt?: string;
+    updatedAt?: string;
+    closedAt?: string | null;
+  } | null;
+}
+
 interface RawProjectItemsResponse {
   organization: {
     issueFields: { nodes: RawIssueFieldNode[] };
@@ -337,27 +392,21 @@ interface RawProjectItemsResponse {
           options?: Array<{ id: string; name: string; color: string }>;
         } | null>;
       };
+      repositories: { nodes: Array<{ name: string; owner: { login: string } }> };
       items: {
-        nodes: Array<{
-          id: string;
-          fieldValues: { nodes: RawFieldValue[] };
-          content: {
-            __typename: "Issue" | "PullRequest" | "DraftIssue";
-            id?: string;
-            number?: number;
-            title: string;
-            url?: string;
-            state?: string;
-            parent?: { id: string } | null;
-            subIssuesSummary?: SubIssuesSummary | null;
-            repository?: { name: string; owner: { login: string } };
-            assignees?: { nodes: ProjectItemUser[] };
-            labels?: { nodes: ProjectItemLabel[] };
-            createdAt?: string;
-            updatedAt?: string;
-            closedAt?: string | null;
-          } | null;
-        }>;
+        pageInfo: RawPageInfo;
+        nodes: RawProjectItemNode[];
+      };
+    } | null;
+  } | null;
+}
+
+interface RawProjectItemsPageResponse {
+  organization: {
+    projectV2: {
+      items: {
+        pageInfo: RawPageInfo;
+        nodes: RawProjectItemNode[];
       };
     } | null;
   } | null;
@@ -411,6 +460,24 @@ export async function fetchProjectDetail(token: string, org: string, number: num
     throw new GithubApiError(`Progetto #${number} non trovato per l'organizzazione "${org}".`);
   }
 
+  // Projects can have more than one page of items — follow the cursor until
+  // there's nothing left, so large projects aren't silently truncated at 100.
+  const allItemNodes: RawProjectItemNode[] = [...project.items.nodes];
+  let pageInfo = project.items.pageInfo;
+  let safety = 0;
+  while (pageInfo.hasNextPage && pageInfo.endCursor && safety < 50) {
+    safety++;
+    const pageData = await graphql<RawProjectItemsPageResponse>(token, PROJECT_ITEMS_PAGE_QUERY, {
+      org,
+      number,
+      after: pageInfo.endCursor,
+    });
+    const pageItems = pageData.organization?.projectV2?.items;
+    if (!pageItems) break;
+    allItemNodes.push(...pageItems.nodes);
+    pageInfo = pageItems.pageInfo;
+  }
+
   const fields: ProjectField[] = project.fields.nodes
     .filter((f): f is NonNullable<typeof f> => !!f?.name && !!f?.dataType)
     .map((f) => ({
@@ -434,7 +501,7 @@ export async function fetchProjectDetail(token: string, org: string, number: num
     };
   }
 
-  const items: ProjectItem[] = project.items.nodes
+  const items: ProjectItem[] = allItemNodes
     .filter((node) => node.content)
     .map((node) => {
       const content = node.content!;
@@ -480,6 +547,7 @@ export async function fetchProjectDetail(token: string, org: string, number: num
     statusOptions: statusOptions.length ? statusOptions : [{ id: "", name: NO_STATUS, color: "GRAY" }],
     fields: fields.filter((f) => f.name !== STATUS_FIELD_NAME),
     issueFieldsByName,
+    linkedRepos: project.repositories.nodes.map((r) => ({ owner: r.owner.login, name: r.name })),
     items,
   };
 }
@@ -917,6 +985,26 @@ export async function fetchOrgRepos(token: string, org: string): Promise<RepoSum
     { org },
   );
   return data.organization?.repositories.nodes ?? [];
+}
+
+const REPO_ISSUE_COUNT_QUERY = `
+  query RepoIssueCount($owner: String!, $name: String!) {
+    repository(owner: $owner, name: $name) {
+      issues {
+        totalCount
+      }
+    }
+  }
+`;
+
+/** Total issue count (all states) for a single repository — used for a header badge, not related to project item counts. */
+export async function fetchRepoIssueCount(token: string, owner: string, name: string): Promise<number> {
+  const data = await graphql<{ repository: { issues: { totalCount: number } } | null }>(
+    token,
+    REPO_ISSUE_COUNT_QUERY,
+    { owner, name },
+  );
+  return data.repository?.issues.totalCount ?? 0;
 }
 
 export interface RepoMetadata {
