@@ -564,6 +564,16 @@ export function groupItemsByStatus(project: ProjectDetail): Map<string, ProjectI
   return map;
 }
 
+/**
+ * Status groups in display order for Table/Gantt: empty statuses dropped,
+ * and the whole list optionally reversed — no per-status reordering, just
+ * whether it reads top-down or bottom-up (Board keeps every status as-is).
+ */
+export function visibleStatusEntries(groups: Map<string, ProjectItem[]>, reversed: boolean): [string, ProjectItem[]][] {
+  const entries = Array.from(groups.entries()).filter(([, items]) => items.length > 0);
+  return reversed ? entries.reverse() : entries;
+}
+
 export { NO_STATUS };
 
 // ---------------------------------------------------------------------------

@@ -115,6 +115,20 @@ export async function setTableColumns(projectId: string, columns: string[]): Pro
   await store.save();
 }
 
+// Whether Table/Gantt show status groups bottom-up instead of the project's
+// natural Status field order — shared across views of a project, like columns.
+export async function getStatusOrderReversed(projectId: string): Promise<boolean> {
+  const store = await getStore();
+  const data = await store.get<boolean>(`status_order_reversed_${projectId}`);
+  return data ?? false;
+}
+
+export async function setStatusOrderReversed(projectId: string, value: boolean): Promise<void> {
+  const store = await getStore();
+  await store.set(`status_order_reversed_${projectId}`, value);
+  await store.save();
+}
+
 export type ThemeName = "vivid" | "dark";
 
 const THEME_KEY = "theme";

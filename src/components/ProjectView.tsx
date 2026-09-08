@@ -7,6 +7,8 @@ import {
   setProjectViewState,
   getTableColumns,
   setTableColumns,
+  getStatusOrderReversed,
+  setStatusOrderReversed,
   type SavedView,
 } from "../lib/store";
 import { defaultColumns, orderColumns } from "../lib/columns";
@@ -77,6 +79,22 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
       if (next.has(key)) next.delete(key);
       else next.add(key);
       setTableColumns(project.id, Array.from(next));
+      return next;
+    });
+  }
+
+  // Status group order for Table/Gantt (Board is unaffected) — one setting
+  // shared by every view of this project, like column visibility.
+  const [statusOrderReversed, setStatusOrderReversedState] = useState(false);
+
+  useEffect(() => {
+    getStatusOrderReversed(project.id).then(setStatusOrderReversedState);
+  }, [project.id]);
+
+  function toggleStatusOrder() {
+    setStatusOrderReversedState((prev) => {
+      const next = !prev;
+      setStatusOrderReversed(project.id, next);
       return next;
     });
   }
@@ -279,6 +297,15 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
             )}
           </button>
           {view === "table" && <ColumnPicker project={project} selected={visibleColumns} onToggle={toggleColumn} />}
+          {(view === "table" || view === "gantt") && (
+            <button
+              onClick={toggleStatusOrder}
+              title="Inverte l'ordine degli stati in Tabella e Gantt (gli stati senza issue non vengono mostrati)"
+              className="rounded-lg border border-neutral-800 px-2 py-1.5 text-xs text-neutral-300 transition hover:border-neutral-500"
+            >
+              {statusOrderReversed ? "↑ Stati" : "↓ Stati"}
+            </button>
+          )}
           <div className="flex rounded-lg border border-neutral-800 p-0.5 text-xs">
             <button
               onClick={() => setView("table")}
@@ -365,6 +392,7 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
             <ProjectTable
               project={visibleProject}
               columns={orderColumns(project, visibleColumns)}
+              reversed={statusOrderReversed}
               onOpenItem={openItemDetail}
               onNewIssueForStatus={openNewIssue}
               onMoveItem={moveItemToStatus}
@@ -377,7 +405,7 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
               onMoveItem={moveItemToStatus}
             />
           ) : (
-            <ProjectGantt project={visibleProject} onOpenItem={openItemDetail} />
+            <ProjectGantt project={visibleProject} reversed={statusOrderReversed} onOpenItem={openItemDetail} />
           )}
         </main>
       </div>

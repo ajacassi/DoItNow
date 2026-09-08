@@ -1,10 +1,11 @@
 import { useState } from "react";
 import type { ProjectDetail, ProjectField, ProjectItem } from "../lib/github";
-import { groupItemsByStatus } from "../lib/github";
+import { groupItemsByStatus, visibleStatusEntries } from "../lib/github";
 import { colorStyle } from "../lib/colors";
 
 interface Props {
   project: ProjectDetail;
+  reversed: boolean;
   onOpenItem: (item: ProjectItem) => void;
 }
 
@@ -42,17 +43,17 @@ function daysBetween(a: Date, b: Date): number {
   return Math.round((b.getTime() - a.getTime()) / DAY_MS);
 }
 
-export default function ProjectGantt({ project, onOpenItem }: Props) {
+export default function ProjectGantt({ project, reversed, onOpenItem }: Props) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [pxPerDay, setPxPerDay] = useState(24);
 
   const { startField, endField } = pickDateFields(project);
-  const groups = groupItemsByStatus(project);
+  const groups = visibleStatusEntries(groupItemsByStatus(project), reversed);
   const optionColor = new Map(project.statusOptions.map((o) => [o.name, o.color]));
 
   // Items with no date on either field are still listed (so it's obvious which
   // ones need updating) — just without a bar, sorted after the dated ones.
-  const rangesByStatus = new Map<string, Array<{ item: ProjectItem; start: Date | null; end: Date | null }>>();
+  const rangesByStatus: Array<[string, Array<{ item: ProjectItem; start: Date | null; end: Date | null }>]> = [];
   let minDate: Date | null = null;
   let maxDate: Date | null = null;
   for (const [status, items] of groups) {
@@ -69,7 +70,7 @@ export default function ProjectGantt({ project, onOpenItem }: Props) {
       if (a.start && b.start) return a.start.getTime() - b.start.getTime();
       return a.start ? -1 : b.start ? 1 : 0;
     });
-    rangesByStatus.set(status, rows);
+    rangesByStatus.push([status, rows]);
   }
 
   function toggle(status: string) {
@@ -137,7 +138,7 @@ export default function ProjectGantt({ project, onOpenItem }: Props) {
         <div className="flex">
           <div className="sticky left-0 z-10 w-64 shrink-0 border-r border-neutral-800 bg-neutral-950">
             <div style={{ height: HEADER_H }} className="border-b border-neutral-800" />
-            {Array.from(rangesByStatus.entries()).map(([status, rows]) => {
+            {rangesByStatus.map(([status, rows]) => {
               const style = colorStyle(optionColor.get(status));
               const isCollapsed = collapsed[status];
               const withDates = rows.filter((r) => r.start).length;
@@ -189,7 +190,7 @@ export default function ProjectGantt({ project, onOpenItem }: Props) {
               <div className="pointer-events-none absolute top-0 z-0 w-px bg-indigo-500/50" style={{ left: todayOffset * pxPerDay, height: "100%" }} />
             )}
 
-            {Array.from(rangesByStatus.entries()).map(([status, rows]) => {
+            {rangesByStatus.map(([status, rows]) => {
               const isCollapsed = collapsed[status];
               return (
                 <div key={status}>

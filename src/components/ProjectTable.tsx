@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ProjectDetail, ProjectField, ProjectItem, ItemFieldValue } from "../lib/github";
-import { groupItemsByStatus } from "../lib/github";
+import { groupItemsByStatus, visibleStatusEntries } from "../lib/github";
 import { colorStyle } from "../lib/colors";
 import { ASSIGNEE_COLUMN, CREATED_COLUMN, UPDATED_COLUMN, CLOSED_COLUMN, availableColumns } from "../lib/columns";
 import SubIssueProgress from "./SubIssueProgress";
@@ -10,6 +10,7 @@ import LabelChip from "./LabelChip";
 interface Props {
   project: ProjectDetail;
   columns: string[];
+  reversed: boolean;
   onOpenItem: (item: ProjectItem) => void;
   onNewIssueForStatus: (statusOptionId: string) => void;
   onMoveItem: (itemId: string, statusOptionId: string, statusName: string) => void;
@@ -118,8 +119,8 @@ function FieldCell({ field, value }: { field: ProjectField; value: ItemFieldValu
   );
 }
 
-export default function ProjectTable({ project, columns: visibleColumns, onOpenItem, onNewIssueForStatus, onMoveItem }: Props) {
-  const columns = groupItemsByStatus(project);
+export default function ProjectTable({ project, columns: visibleColumns, reversed, onOpenItem, onNewIssueForStatus, onMoveItem }: Props) {
+  const columns = visibleStatusEntries(groupItemsByStatus(project), reversed);
   const optionColor = new Map(project.statusOptions.map((o) => [o.name, o.color]));
   const optionId = new Map(project.statusOptions.map((o) => [o.name, o.id]));
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -136,7 +137,7 @@ export default function ProjectTable({ project, columns: visibleColumns, onOpenI
   return (
     <div className="h-full overflow-y-auto px-8 py-6">
       <div className="mx-auto max-w-5xl space-y-6">
-        {Array.from(columns.entries()).map(([status, items]) => {
+        {columns.map(([status, items]) => {
           const style = colorStyle(optionColor.get(status));
           const isCollapsed = collapsed[status];
           const targetOptionId = optionId.get(status);
