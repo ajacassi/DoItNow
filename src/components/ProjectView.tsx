@@ -15,6 +15,7 @@ import ProjectBoard from "./ProjectBoard";
 import ProjectGantt from "./ProjectGantt";
 import IssueDetailPanel from "./IssueDetailPanel";
 import NewIssueModal from "./NewIssueModal";
+import ProjectCleanup from "./ProjectCleanup";
 import LabelFilterSidebar from "./LabelFilterSidebar";
 import QueryInput from "./QueryInput";
 import SavedViewsBar from "./SavedViewsBar";
@@ -39,6 +40,7 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
   const [openIssueRef, setOpenIssueRef] = useState<IssueRef | null>(null);
   const [newIssueStatusId, setNewIssueStatusId] = useState<string | null>(null);
   const [showNewIssue, setShowNewIssue] = useState(false);
+  const [showCleanup, setShowCleanup] = useState(false);
   const [showLabelFilter, setShowLabelFilter] = useState(false);
   const [selectedLabels, setSelectedLabels] = useState<Set<string>>(new Set());
   const [queryText, setQueryText] = useState("");
@@ -310,6 +312,13 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
           >
             {refreshing ? "Aggiorno…" : "Aggiorna"}
           </button>
+          <button
+            onClick={() => setShowCleanup(true)}
+            title="Seleziona issue con una query per scollegarle o eliminarle in blocco — azione separata, ad accesso volontario"
+            className="ml-1 rounded-lg border border-neutral-800 px-2 py-1.5 text-xs text-neutral-600 transition hover:border-amber-800 hover:text-amber-500"
+          >
+            🧹
+          </button>
         </div>
       </header>
 
@@ -396,6 +405,10 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
           onClose={() => setShowNewIssue(false)}
           onCreated={(item) => item && onItemAdded(item)}
         />
+      )}
+
+      {showCleanup && (
+        <ProjectCleanup token={token} project={project} onClose={() => setShowCleanup(false)} onItemRemoved={onItemRemoved} />
       )}
     </div>
   );

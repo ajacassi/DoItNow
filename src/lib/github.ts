@@ -760,6 +760,19 @@ export async function removeItemFromProject(token: string, projectId: string, it
   );
 }
 
+/** Permanently deletes an issue from its repository (irreversible — not just removed from a project). */
+export async function deleteIssue(token: string, issueId: string): Promise<void> {
+  await graphql(
+    token,
+    `mutation($issueId: ID!) {
+      deleteIssue(input: { issueId: $issueId }) {
+        clientMutationId
+      }
+    }`,
+    { issueId },
+  );
+}
+
 export async function updateIssueTitle(token: string, issueId: string, title: string): Promise<void> {
   await graphql(token, `mutation($id: ID!, $title: String!) { updateIssue(input: { id: $id, title: $title }) { clientMutationId } }`, {
     id: issueId,
