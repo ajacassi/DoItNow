@@ -1,2 +1,104 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
+
+/*
+ * "Light" theme (ZenHub-inspired) — overrides the same Tailwind `--color-*`
+ * variables every component already renders through, so no component needs
+ * to change. Written unlayered (outside @layer) so it always wins over
+ * Tailwind's own `@layer theme` regardless of specificity or source order.
+ *
+ * The app consistently uses each neutral step for one role (950/900 = bg
+ * surfaces, 800/700 = borders, 600..300 = text by prominence, 100 = primary
+ * text) and every colored chip follows the same `{c}-950/60 bg,
+ * {c}-300 text, {c}-700/50 border, {c}-400 dot` recipe (see lib/colors.ts).
+ * A light theme just needs that whole ramp's lightness direction inverted —
+ * 100 becomes the darkest (primary text), 950/900 the lightest (surfaces) —
+ * which is what turns every dark chip into a ZenHub-style pastel one for
+ * free, labels and status pills included.
+ */
+[data-theme="vivid"] {
+  --color-neutral-950: #f4f3fb; /* page backdrop */
+  --color-neutral-900: #ffffff; /* card/panel/input surface — pops lighter than the backdrop */
+  --color-neutral-800: #e7e4f3; /* borders on white surfaces */
+  --color-neutral-700: #d4cfe8; /* stronger borders, dividers, hover borders */
+  --color-neutral-600: #9b95b8; /* muted icons / tertiary elements */
+  --color-neutral-500: #726c8e; /* secondary text — meta, timestamps, labels */
+  --color-neutral-400: #5c5678; /* more prominent secondary text */
+  --color-neutral-300: #423c5c; /* prominent secondary text, hover states */
+  --color-neutral-200: #2c2745;
+  --color-neutral-100: #1a1730; /* primary text — headings, titles */
+
+  --color-indigo-950: #e6e9ff;
+  --color-indigo-600: #4f46e5;
+  --color-indigo-500: #6366f1;
+  --color-indigo-400: #7c6ff0;
+  --color-indigo-300: #4338ca;
+
+  --color-blue-950: #dbeafe;
+  --color-blue-700: #93c5fd;
+  --color-blue-400: #3b82f6;
+  --color-blue-300: #1d4ed8;
+
+  --color-emerald-950: #d1fae5;
+  --color-emerald-700: #6ee7b7;
+  --color-emerald-400: #10b981;
+  --color-emerald-300: #047857;
+
+  --color-yellow-950: #fef9c3;
+  --color-yellow-700: #fde047;
+  --color-yellow-400: #eab308;
+  --color-yellow-300: #a16207;
+
+  --color-orange-950: #ffedd5;
+  --color-orange-700: #fdba74;
+  --color-orange-400: #f97316;
+  --color-orange-300: #c2410c;
+
+  --color-red-950: #fee2e2;
+  --color-red-900: #fecaca;
+  --color-red-700: #fca5a5;
+  --color-red-400: #ef4444;
+  --color-red-300: #b91c1c;
+
+  --color-pink-950: #fce7f3;
+  --color-pink-700: #f9a8d4;
+  --color-pink-400: #ec4899;
+  --color-pink-300: #be185d;
+
+  --color-purple-950: #f3e8ff;
+  --color-purple-700: #d8b4fe;
+  --color-purple-400: #a855f7;
+  --color-purple-300: #7e22ce;
+
+  /* White surfaces read as elevated cards over the tinted backdrop, ZenHub-style. */
+  --shadow-color: 222deg 30% 30%;
+}
+
+[data-theme="vivid"] .bg-neutral-900 {
+  box-shadow: 0 1px 2px hsl(var(--shadow-color) / 0.06), 0 1px 1px hsl(var(--shadow-color) / 0.05);
+}
+
+/* `prose-invert` assumes a dark background (it's used unconditionally by
+   MarkdownContent) — under the light theme it needs to render as normal
+   light-mode typography instead, so its own `--tw-prose-invert-*` variables
+   are pointed at the exact values `.prose`'s non-inverted defaults use. */
+[data-theme="vivid"] .prose-invert {
+  --tw-prose-invert-body: oklch(37.3% .034 259.733);
+  --tw-prose-invert-headings: oklch(21% .034 264.665);
+  --tw-prose-invert-lead: oklch(44.6% .03 256.802);
+  --tw-prose-invert-links: oklch(21% .034 264.665);
+  --tw-prose-invert-bold: oklch(21% .034 264.665);
+  --tw-prose-invert-counters: oklch(55.1% .027 264.364);
+  --tw-prose-invert-bullets: oklch(87.2% .01 258.338);
+  --tw-prose-invert-hr: oklch(92.8% .006 264.531);
+  --tw-prose-invert-quotes: oklch(21% .034 264.665);
+  --tw-prose-invert-quote-borders: oklch(92.8% .006 264.531);
+  --tw-prose-invert-captions: oklch(55.1% .027 264.364);
+  --tw-prose-invert-kbd: oklch(21% .034 264.665);
+  --tw-prose-invert-kbd-shadows: oklab(21% -.00316127 -.0338527 / .1);
+  --tw-prose-invert-code: oklch(21% .034 264.665);
+  --tw-prose-invert-pre-code: oklch(92.8% .006 264.531);
+  --tw-prose-invert-pre-bg: oklch(96.7% .003 264.542);
+  --tw-prose-invert-th-borders: oklch(87.2% .01 258.338);
+  --tw-prose-invert-td-borders: oklch(92.8% .006 264.531);
+}

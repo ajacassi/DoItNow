@@ -2,7 +2,17 @@ import { useEffect, useState } from "react";
 import TokenScreen from "./components/TokenScreen";
 import ProjectPicker from "./components/ProjectPicker";
 import ProjectView from "./components/ProjectView";
-import { getGithubToken, setGithubToken, clearGithubToken, getLastOrg, setLastOrg } from "./lib/store";
+import ThemeToggle from "./components/ThemeToggle";
+import {
+  getGithubToken,
+  setGithubToken,
+  clearGithubToken,
+  getLastOrg,
+  setLastOrg,
+  getTheme,
+  setTheme,
+  type ThemeName,
+} from "./lib/store";
 import {
   fetchOrgProjects,
   fetchProjectDetail,
@@ -30,6 +40,24 @@ export default function App() {
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [boardRefreshing, setBoardRefreshing] = useState(false);
   const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
+  const [theme, setThemeState] = useState<ThemeName>("vivid");
+
+  useEffect(() => {
+    getTheme().then((t) => {
+      const resolved = t ?? "vivid";
+      setThemeState(resolved);
+      document.documentElement.dataset.theme = resolved === "vivid" ? "vivid" : "";
+    });
+  }, []);
+
+  function toggleTheme() {
+    setThemeState((prev) => {
+      const next: ThemeName = prev === "vivid" ? "dark" : "vivid";
+      document.documentElement.dataset.theme = next === "vivid" ? "vivid" : "";
+      setTheme(next);
+      return next;
+    });
+  }
 
   useEffect(() => {
     getGithubToken().then(async (t) => {
@@ -140,16 +168,13 @@ export default function App() {
     setScreen({ name: "token" });
   }
 
+  let content: React.ReactNode;
   if (screen.name === "loading") {
-    return <div className="h-screen w-screen bg-neutral-950" />;
-  }
-
-  if (screen.name === "token") {
-    return <TokenScreen onSubmit={handleTokenSubmit} error={tokenError} />;
-  }
-
-  if (screen.name === "board") {
-    return (
+    content = <div className="h-screen w-screen bg-neutral-950" />;
+  } else if (screen.name === "token") {
+    content = <TokenScreen onSubmit={handleTokenSubmit} error={tokenError} />;
+  } else if (screen.name === "board") {
+    content = (
       <ProjectView
         token={token!}
         org={org.trim()}
@@ -162,18 +187,25 @@ export default function App() {
         onItemRemoved={removeItem}
       />
     );
+  } else {
+    content = (
+      <ProjectPicker
+        org={org}
+        onOrgChange={setOrg}
+        onFetch={handleFetchProjects}
+        projects={projects}
+        loading={pickerLoading}
+        error={pickerError}
+        onSelect={openProject}
+        onLogout={handleLogout}
+      />
+    );
   }
 
   return (
-    <ProjectPicker
-      org={org}
-      onOrgChange={setOrg}
-      onFetch={handleFetchProjects}
-      projects={projects}
-      loading={pickerLoading}
-      error={pickerError}
-      onSelect={openProject}
-      onLogout={handleLogout}
-    />
+    <>
+      {content}
+      <ThemeToggle theme={theme} onToggle={toggleTheme} />
+    </>
   );
 }

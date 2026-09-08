@@ -114,3 +114,19 @@ export async function setTableColumns(projectId: string, columns: string[]): Pro
   await store.set(`table_columns_${projectId}`, columns);
   await store.save();
 }
+
+export type ThemeName = "vivid" | "dark";
+
+const THEME_KEY = "theme";
+
+export async function getTheme(): Promise<ThemeName | null> {
+  const store = await getStore();
+  const data = await store.get<ThemeName>(THEME_KEY);
+  return data ?? null;
+}
+
+export async function setTheme(theme: ThemeName): Promise<void> {
+  const store = await getStore();
+  await store.set(THEME_KEY, theme);
+  await store.save();
+}
