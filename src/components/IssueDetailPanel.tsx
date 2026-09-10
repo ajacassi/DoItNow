@@ -28,6 +28,7 @@ import {
   type ProjectItem,
   type IssueRef,
   type RepoLabel,
+  type StatusOption,
 } from "../lib/github";
 import { colorStyle } from "../lib/colors";
 import { realProjectFields } from "../lib/columns";
@@ -38,6 +39,7 @@ import MentionTextarea from "./MentionTextarea";
 import SubIssuesSection from "./SubIssuesSection";
 import ExternalLink from "./ExternalLink";
 import LabelManager from "./LabelManager";
+import FieldOptionsManager from "./FieldOptionsManager";
 
 interface Props {
   token: string;
@@ -48,6 +50,7 @@ interface Props {
   onItemChange: (itemId: string, patch: Partial<ProjectItem>) => void;
   onItemAdded: (item: ProjectItem) => void;
   onItemRemoved: (itemId: string) => void;
+  onFieldOptionsChanged: (fieldId: string, options: StatusOption[]) => void;
   onOpenIssue: (ref: IssueRef) => void;
 }
 
@@ -60,6 +63,7 @@ export default function IssueDetailPanel({
   onItemChange,
   onItemAdded,
   onItemRemoved,
+  onFieldOptionsChanged,
   onOpenIssue,
 }: Props) {
   const [detail, setDetail] = useState<IssueDetail | null>(null);
@@ -73,6 +77,9 @@ export default function IssueDetailPanel({
   const [postingComment, setPostingComment] = useState(false);
   const [editingBody, setEditingBody] = useState(false);
   const [showLabelManager, setShowLabelManager] = useState(false);
+  const [managingOptionsField, setManagingOptionsField] = useState<{ id: string; name: string; kind: "SINGLE_SELECT" | "MULTI_SELECT" } | null>(
+    null,
+  );
 
   // Sub-issues aren't added to the project board, so an issue opened from a
   // Sub-issue list won't have a matching entry here — project-field editing
@@ -215,6 +222,18 @@ export default function IssueDetailPanel({
     });
     if (projectItem && wasOnIssue) {
       const nextLabels = (detail?.labels ?? []).map((l) => (l.id === label.id ? label : l));
+      onItemChange(projectItem.id, { labels: nextLabels.map((l) => ({ name: l.name, color: l.color })) });
+    }
+  }
+
+  function handleLabelDeleted(labelId: string) {
+    const wasOnIssue = detail?.labels.some((l) => l.id === labelId) ?? false;
+    setDetail((d) => {
+      if (!d) return d;
+      return { ...d, repoLabels: d.repoLabels.filter((l) => l.id !== labelId), labels: d.labels.filter((l) => l.id !== labelId) };
+    });
+    if (projectItem && wasOnIssue) {
+      const nextLabels = (detail?.labels ?? []).filter((l) => l.id !== labelId);
       onItemChange(projectItem.id, { labels: nextLabels.map((l) => ({ name: l.name, color: l.color })) });
     }
   }
@@ -558,7 +577,18 @@ export default function IssueDetailPanel({
                       const currentOptionId = value?.type === "singleSelect" ? options?.find((o) => o.name === value.name)?.id : undefined;
                       return (
                         <label key={f.id} className="text-xs text-neutral-500">
-                          {f.name}
+                          <div className="flex items-center justify-between">
+                            {f.name}
+                            {!issueField && (
+                              <button
+                                type="button"
+                                onClick={() => setManagingOptionsField({ id: f.id, name: f.name, kind: "SINGLE_SELECT" })}
+                                className="text-neutral-600 hover:text-neutral-300"
+                              >
+                                Gestisci opzioni…
+                              </button>
+                            )}
+                          </div>
                           <select
                             value={currentOptionId ?? ""}
                             onChange={(e) => changeSingleSelectField(f.id, f.name, e.target.value)}
@@ -586,7 +616,16 @@ export default function IssueDetailPanel({
                       }
                       return (
                         <div key={f.id} className="text-xs text-neutral-500">
-                          {f.name}
+                          <div className="flex items-center justify-between">
+                            {f.name}
+                            <button
+                              type="button"
+                              onClick={() => setManagingOptionsField({ id: f.id, name: f.name, kind: "MULTI_SELECT" })}
+                              className="text-neutral-600 hover:text-neutral-300"
+                            >
+                              Gestisci opzioni…
+                            </button>
+                          </div>
                           <div className="mt-1 flex flex-wrap gap-1.5 rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5">
                             {options.length === 0 && <span className="text-neutral-700">—</span>}
                             {options.map((o) => {
@@ -695,6 +734,7 @@ export default function IssueDetailPanel({
               subIssues={detail.subIssues}
               onSubIssuesChange={(next) => setDetail({ ...detail, subIssues: next })}
               onItemAdded={onItemAdded}
+              onFieldOptionsChanged={onFieldOptionsChanged}
               onOpenIssue={onOpenIssue}
             />
 
@@ -755,6 +795,19 @@ export default function IssueDetailPanel({
           onClose={() => setShowLabelManager(false)}
           onCreated={handleLabelCreated}
           onUpdated={handleLabelUpdated}
+          onDeleted={handleLabelDeleted}
+        />
+      )}
+
+      {managingOptionsField && (
+        <FieldOptionsManager
+          token={token}
+          fieldId={managingOptionsField.id}
+          fieldName={managingOptionsField.name}
+          kind={managingOptionsField.kind}
+          options={project.fields.find((f) => f.id === managingOptionsField.id)?.options ?? []}
+          onClose={() => setManagingOptionsField(null)}
+          onOptionsChanged={(options) => onFieldOptionsChanged(managingOptionsField.id, options)}
         />
       )}
     </div>

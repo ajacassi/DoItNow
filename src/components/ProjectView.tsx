@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ProjectDetail, ProjectItem, IssueRef } from "../lib/github";
+import type { ProjectDetail, ProjectItem, IssueRef, StatusOption } from "../lib/github";
 import { setProjectFieldSingleSelect, fetchRepoIssueCount, mostCommonRepo } from "../lib/github";
 import { parseIssueQuery, matchesIssueQuery } from "../lib/query";
 import {
@@ -37,11 +37,23 @@ interface Props {
   onItemChange: (itemId: string, patch: Partial<ProjectItem>) => void;
   onItemAdded: (item: ProjectItem) => void;
   onItemRemoved: (itemId: string) => void;
+  onFieldOptionsChanged: (fieldId: string, options: StatusOption[]) => void;
 }
 
 type ViewMode = "table" | "board" | "gantt";
 
-export default function ProjectView({ token, org, project, onBack, onRefresh, refreshing, onItemChange, onItemAdded, onItemRemoved }: Props) {
+export default function ProjectView({
+  token,
+  org,
+  project,
+  onBack,
+  onRefresh,
+  refreshing,
+  onItemChange,
+  onItemAdded,
+  onItemRemoved,
+  onFieldOptionsChanged,
+}: Props) {
   const [view, setView] = useState<ViewMode>("table");
   const [openIssueRef, setOpenIssueRef] = useState<IssueRef | null>(null);
   const [newIssueStatusId, setNewIssueStatusId] = useState<string | null>(null);
@@ -436,6 +448,7 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
           onItemChange={onItemChange}
           onItemAdded={onItemAdded}
           onItemRemoved={onItemRemoved}
+          onFieldOptionsChanged={onFieldOptionsChanged}
           onOpenIssue={setOpenIssueRef}
         />
       )}
@@ -448,6 +461,7 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
           initialStatusId={newIssueStatusId ?? undefined}
           onClose={() => setShowNewIssue(false)}
           onCreated={(item) => item && onItemAdded(item)}
+          onFieldOptionsChanged={onFieldOptionsChanged}
         />
       )}
 

@@ -24,6 +24,7 @@ import {
   type ItemFieldValue,
   type CreatedIssue,
   type RepoLabel,
+  type StatusOption,
 } from "../lib/github";
 import { realProjectFields } from "../lib/columns";
 import { colorStyle } from "../lib/colors";
@@ -31,6 +32,7 @@ import MentionTextarea from "./MentionTextarea";
 import LabelChip from "./LabelChip";
 import ImageUploadButton from "./ImageUploadButton";
 import LabelManager from "./LabelManager";
+import FieldOptionsManager from "./FieldOptionsManager";
 
 interface Props {
   token: string;
@@ -45,6 +47,7 @@ interface Props {
   onClose: () => void;
   /** `item` is null when the created issue is a sub-issue (sub-issues aren't added to the project board). */
   onCreated: (item: ProjectItem | null, created: CreatedIssue) => void;
+  onFieldOptionsChanged: (fieldId: string, options: StatusOption[]) => void;
 }
 
 export default function NewIssueModal({
@@ -56,6 +59,7 @@ export default function NewIssueModal({
   parentIssueId,
   onClose,
   onCreated,
+  onFieldOptionsChanged,
 }: Props) {
   const [repos, setRepos] = useState<RepoSummary[]>([]);
   const [reposLoading, setReposLoading] = useState(true);
@@ -63,6 +67,9 @@ export default function NewIssueModal({
   const [metadata, setMetadata] = useState<RepoMetadata | null>(null);
   const [metadataLoading, setMetadataLoading] = useState(false);
   const [showLabelManager, setShowLabelManager] = useState(false);
+  const [managingOptionsField, setManagingOptionsField] = useState<{ id: string; name: string; kind: "SINGLE_SELECT" | "MULTI_SELECT" } | null>(
+    null,
+  );
 
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -125,6 +132,11 @@ export default function NewIssueModal({
 
   function handleLabelUpdated(label: RepoLabel) {
     setMetadata((m) => (m ? { ...m, labels: m.labels.map((l) => (l.id === label.id ? label : l)) } : m));
+  }
+
+  function handleLabelDeleted(labelId: string) {
+    setMetadata((m) => (m ? { ...m, labels: m.labels.filter((l) => l.id !== labelId) } : m));
+    setLabelIds((ids) => ids.filter((id) => id !== labelId));
   }
 
   async function handleCreate() {
@@ -431,7 +443,18 @@ export default function NewIssueModal({
                       const options = issueField?.options ?? f.options;
                       return (
                         <label key={f.id} className="text-xs text-neutral-500">
-                          {f.name}
+                          <div className="flex items-center justify-between">
+                            {f.name}
+                            {!issueField && (
+                              <button
+                                type="button"
+                                onClick={() => setManagingOptionsField({ id: f.id, name: f.name, kind: "SINGLE_SELECT" })}
+                                className="text-neutral-600 hover:text-neutral-300"
+                              >
+                                Gestisci opzioni…
+                              </button>
+                            )}
+                          </div>
                           <select
                             value={fieldInputs[f.name] ?? ""}
                             onChange={(e) => setFieldInput(f.name, e.target.value)}
@@ -459,7 +482,16 @@ export default function NewIssueModal({
                       }
                       return (
                         <div key={f.id} className="text-xs text-neutral-500">
-                          {f.name}
+                          <div className="flex items-center justify-between">
+                            {f.name}
+                            <button
+                              type="button"
+                              onClick={() => setManagingOptionsField({ id: f.id, name: f.name, kind: "MULTI_SELECT" })}
+                              className="text-neutral-600 hover:text-neutral-300"
+                            >
+                              Gestisci opzioni…
+                            </button>
+                          </div>
                           <div className="mt-1 flex flex-wrap gap-1.5 rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5">
                             {options.length === 0 && <span className="text-neutral-700">—</span>}
                             {options.map((o) => {
@@ -555,6 +587,19 @@ export default function NewIssueModal({
           onClose={() => setShowLabelManager(false)}
           onCreated={handleLabelCreated}
           onUpdated={handleLabelUpdated}
+          onDeleted={handleLabelDeleted}
+        />
+      )}
+
+      {managingOptionsField && (
+        <FieldOptionsManager
+          token={token}
+          fieldId={managingOptionsField.id}
+          fieldName={managingOptionsField.name}
+          kind={managingOptionsField.kind}
+          options={project.fields.find((f) => f.id === managingOptionsField.id)?.options ?? []}
+          onClose={() => setManagingOptionsField(null)}
+          onOptionsChanged={(options) => onFieldOptionsChanged(managingOptionsField.id, options)}
         />
       )}
     </div>

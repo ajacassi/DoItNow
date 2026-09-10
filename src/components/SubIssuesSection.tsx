@@ -6,6 +6,7 @@ import {
   type ProjectDetail,
   type ProjectItem,
   type IssueRef,
+  type StatusOption,
 } from "../lib/github";
 import NewIssueModal from "./NewIssueModal";
 import IssuePicker from "./IssuePicker";
@@ -20,6 +21,7 @@ interface Props {
   subIssues: SubIssueSummary[];
   onSubIssuesChange: (next: SubIssueSummary[]) => void;
   onItemAdded: (item: ProjectItem) => void;
+  onFieldOptionsChanged: (fieldId: string, options: StatusOption[]) => void;
   onOpenIssue: (ref: IssueRef) => void;
 }
 
@@ -32,6 +34,7 @@ export default function SubIssuesSection({
   subIssues,
   onSubIssuesChange,
   onItemAdded,
+  onFieldOptionsChanged,
   onOpenIssue,
 }: Props) {
   const [showCreate, setShowCreate] = useState(false);
@@ -156,6 +159,7 @@ export default function SubIssuesSection({
           project={project}
           parentIssueId={issueId}
           initialRepoName={repoName ?? undefined}
+          onFieldOptionsChanged={onFieldOptionsChanged}
           onClose={() => setShowCreate(false)}
           onCreated={(item, created) => {
             if (item) onItemAdded(item);

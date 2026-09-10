@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createRepoLabel, updateRepoLabel, GithubApiError, type RepoLabel } from "../lib/github";
+import { createRepoLabel, updateRepoLabel, deleteRepoLabel, GithubApiError, type RepoLabel } from "../lib/github";
 import LabelChip from "./LabelChip";
 
 interface Props {
@@ -9,6 +9,7 @@ interface Props {
   onClose: () => void;
   onCreated: (label: RepoLabel) => void;
   onUpdated: (label: RepoLabel) => void;
+  onDeleted: (labelId: string) => void;
 }
 
 const DEFAULT_COLOR = "6366f1";
@@ -17,8 +18,9 @@ function isValidHexColor(value: string): boolean {
   return /^[0-9a-fA-F]{6}$/.test(value);
 }
 
-export default function LabelManager({ token, repositoryId, labels, onClose, onCreated, onUpdated }: Props) {
+export default function LabelManager({ token, repositoryId, labels, onClose, onCreated, onUpdated, onDeleted }: Props) {
   const [editing, setEditing] = useState<RepoLabel | "new" | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<RepoLabel | null>(null);
   const [name, setName] = useState("");
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [description, setDescription] = useState("");
@@ -61,6 +63,21 @@ export default function LabelManager({ token, repositoryId, labels, onClose, onC
     }
   }
 
+  async function doDelete() {
+    if (!confirmDelete) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await deleteRepoLabel(token, confirmDelete.id);
+      onDeleted(confirmDelete.id);
+      setConfirmDelete(null);
+    } catch (e) {
+      setError(e instanceof GithubApiError ? e.message : "Eliminazione non riuscita.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const isForm = editing !== null;
 
   return (
@@ -70,21 +87,54 @@ export default function LabelManager({ token, repositoryId, labels, onClose, onC
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
-          <h2 className="text-sm font-semibold text-neutral-100">{isForm ? (editing === "new" ? "Nuova label" : "Modifica label") : "Label della repo"}</h2>
+          <h2 className="text-sm font-semibold text-neutral-100">
+            {confirmDelete ? "Eliminare la label?" : isForm ? (editing === "new" ? "Nuova label" : "Modifica label") : "Label della repo"}
+          </h2>
           <button onClick={onClose} className="text-neutral-500 hover:text-neutral-200">
             ✕
           </button>
         </div>
 
-        {!isForm ? (
+        {confirmDelete ? (
+          <div className="space-y-3 p-4">
+            {error && <div className="rounded-lg border border-red-900 bg-red-950/40 px-3 py-2 text-xs text-red-300">{error}</div>}
+            <div>
+              <LabelChip name={confirmDelete.name} color={confirmDelete.color} />
+            </div>
+            <p className="text-xs text-neutral-400">
+              Azione <span className="font-semibold text-red-300">irreversibile</span>: la label verrà rimossa da tutte le issue che la usano.
+            </p>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                disabled={saving}
+                className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 hover:border-neutral-500 disabled:opacity-40"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={doDelete}
+                disabled={saving}
+                className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-red-600 disabled:opacity-40"
+              >
+                {saving ? "Elimino…" : "Elimina"}
+              </button>
+            </div>
+          </div>
+        ) : !isForm ? (
           <>
             <div className="flex-1 space-y-1 overflow-y-auto p-3">
               {labels.map((l) => (
                 <div key={l.id} className="flex items-center justify-between gap-2 rounded-lg px-1.5 py-1 hover:bg-neutral-900">
                   <LabelChip name={l.name} color={l.color} />
-                  <button onClick={() => startEdit(l)} className="shrink-0 text-xs text-neutral-500 hover:text-neutral-200">
-                    Modifica
-                  </button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button onClick={() => startEdit(l)} className="text-xs text-neutral-500 hover:text-neutral-200">
+                      Modifica
+                    </button>
+                    <button onClick={() => setConfirmDelete(l)} className="text-xs text-neutral-600 hover:text-red-400">
+                      Elimina
+                    </button>
+                  </div>
                 </div>
               ))}
               {labels.length === 0 && <p className="px-1.5 py-1 text-xs text-neutral-600">Nessuna label in questa repo.</p>}

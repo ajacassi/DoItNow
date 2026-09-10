@@ -21,6 +21,7 @@ import {
   type ProjectSummary,
   type ProjectDetail,
   type ProjectItem,
+  type StatusOption,
 } from "./lib/github";
 
 type Screen =
@@ -154,6 +155,19 @@ export default function App() {
     });
   }
 
+  function patchFieldOptions(fieldId: string, options: StatusOption[]) {
+    setScreen((s) => {
+      if (s.name !== "board") return s;
+      return {
+        ...s,
+        project: {
+          ...s.project,
+          fields: s.project.fields.map((f) => (f.id === fieldId ? { ...f, options } : f)),
+        },
+      };
+    });
+  }
+
   function removeItem(itemId: string) {
     setScreen((s) => {
       if (s.name !== "board") return s;
@@ -185,6 +199,7 @@ export default function App() {
         onItemChange={patchItem}
         onItemAdded={addItem}
         onItemRemoved={removeItem}
+        onFieldOptionsChanged={patchFieldOptions}
       />
     );
   } else {

@@ -92,6 +92,7 @@ export interface StatusOption {
   id: string;
   name: string;
   color: string;
+  description?: string;
 }
 
 export interface ProjectField {
@@ -307,6 +308,7 @@ const PROJECT_ITEMS_QUERY = `
                 id
                 name
                 color
+                description
               }
             }
             ... on ProjectV2MultiSelectField {
@@ -314,6 +316,7 @@ const PROJECT_ITEMS_QUERY = `
                 id
                 name
                 color
+                description
               }
             }
           }
@@ -416,7 +419,7 @@ interface RawProjectItemsResponse {
           id?: string;
           name?: string;
           dataType?: string;
-          options?: Array<{ id: string; name: string; color: string }>;
+          options?: Array<{ id: string; name: string; color: string; description?: string }>;
         } | null>;
       };
       repositories: { nodes: Array<{ name: string; owner: { login: string } }> };
@@ -513,7 +516,7 @@ export async function fetchProjectDetail(token: string, org: string, number: num
       id: f.id!,
       name: f.name!,
       dataType: f.dataType!,
-      options: f.options?.map((o) => ({ id: o.id, name: o.name, color: o.color })),
+      options: f.options?.map((o) => ({ id: o.id, name: o.name, color: o.color, description: o.description ?? "" })),
     }));
 
   const statusField = fields.find((f) => f.name === STATUS_FIELD_NAME);
@@ -852,6 +855,66 @@ export async function updateRepoLabel(
     { labelId, name, color, description: description || null },
   );
   return data.updateLabel.label;
+}
+
+export async function deleteRepoLabel(token: string, labelId: string): Promise<void> {
+  await graphql(
+    token,
+    `mutation($labelId: ID!) {
+      deleteLabel(input: { id: $labelId }) {
+        clientMutationId
+      }
+    }`,
+    { labelId },
+  );
+}
+
+export interface FieldOptionInput {
+  /** Omit for a brand-new option — GitHub assigns its id. Include an existing option's id to keep updating that same option (and its current item values) instead of replacing it with a new one. */
+  id?: string;
+  name: string;
+  color: string;
+  description: string;
+}
+
+/**
+ * Both mutations replace a project field's ENTIRE option list in one call —
+ * that's how GitHub's API works for these (no separate "add one option"
+ * mutation) — so callers must always resend every option, not just the one
+ * being added or edited, or the others silently disappear.
+ */
+export async function updateSingleSelectFieldOptions(token: string, fieldId: string, options: FieldOptionInput[]): Promise<StatusOption[]> {
+  const data = await graphql<{ updateProjectV2Field: { projectV2Field: { options: StatusOption[] } } }>(
+    token,
+    `mutation($fieldId: ID!, $options: [ProjectV2SingleSelectFieldOptionInput!]) {
+      updateProjectV2Field(input: { fieldId: $fieldId, singleSelectOptions: $options }) {
+        projectV2Field {
+          ... on ProjectV2SingleSelectField {
+            options { id name color description }
+          }
+        }
+      }
+    }`,
+    { fieldId, options },
+  );
+  return data.updateProjectV2Field.projectV2Field.options;
+}
+
+export async function updateMultiSelectFieldOptions(token: string, fieldId: string, options: FieldOptionInput[]): Promise<StatusOption[]> {
+  const data = await graphql<{ updateProjectV2Field: { projectV2Field: { options: StatusOption[] } } }>(
+    token,
+    `mutation($fieldId: ID!, $options: [ProjectV2MultiSelectFieldOptionInput!]) {
+      updateProjectV2Field(input: { fieldId: $fieldId, multiSelectOptions: $options }) {
+        projectV2Field {
+          ... on ProjectV2MultiSelectField {
+            options: multiSelectOptions { id name color description }
+          }
+        }
+      }
+    }`,
+    { fieldId, options },
+  );
+  return data.updateProjectV2Field.projectV2Field.options;
 }
 
 export async function removeItemFromProject(token: string, projectId: string, itemId: string): Promise<void> {
