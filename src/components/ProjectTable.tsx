@@ -3,6 +3,7 @@ import type { ProjectDetail, ProjectField, ProjectItem, ItemFieldValue } from ".
 import { groupItemsByStatus, visibleStatusEntries } from "../lib/github";
 import { colorStyle } from "../lib/colors";
 import { ASSIGNEE_COLUMN, CREATED_COLUMN, UPDATED_COLUMN, CLOSED_COLUMN, availableColumns } from "../lib/columns";
+import { sortItems, type SortKey } from "../lib/sort";
 import SubIssueProgress from "./SubIssueProgress";
 import ExternalLink from "./ExternalLink";
 import LabelChip from "./LabelChip";
@@ -11,6 +12,7 @@ interface Props {
   project: ProjectDetail;
   columns: string[];
   reversed: boolean;
+  sortKeys: SortKey[];
   onOpenItem: (item: ProjectItem) => void;
   onNewIssueForStatus: (statusOptionId: string) => void;
   onMoveItem: (itemId: string, statusOptionId: string, statusName: string) => void;
@@ -119,8 +121,10 @@ function FieldCell({ field, value }: { field: ProjectField; value: ItemFieldValu
   );
 }
 
-export default function ProjectTable({ project, columns: visibleColumns, reversed, onOpenItem, onNewIssueForStatus, onMoveItem }: Props) {
-  const columns = visibleStatusEntries(groupItemsByStatus(project), reversed);
+export default function ProjectTable({ project, columns: visibleColumns, reversed, sortKeys, onOpenItem, onNewIssueForStatus, onMoveItem }: Props) {
+  const columns = visibleStatusEntries(groupItemsByStatus(project), reversed).map(
+    ([status, items]) => [status, sortItems(items, project, sortKeys)] as const,
+  );
   const optionColor = new Map(project.statusOptions.map((o) => [o.name, o.color]));
   const optionId = new Map(project.statusOptions.map((o) => [o.name, o.id]));
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});

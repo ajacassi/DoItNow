@@ -1,4 +1,5 @@
 import { load, type Store } from "@tauri-apps/plugin-store";
+import type { SortKey } from "./sort";
 
 const SETTINGS_FILE = "settings.json";
 const TOKEN_KEY = "github_token";
@@ -126,6 +127,20 @@ export async function getStatusOrderReversed(projectId: string): Promise<boolean
 export async function setStatusOrderReversed(projectId: string, value: boolean): Promise<void> {
   const store = await getStore();
   await store.set(`status_order_reversed_${projectId}`, value);
+  await store.save();
+}
+
+// Composable multi-column sort within each status group in Table — shared
+// across views of a project, like columns and status order.
+export async function getSortKeys(projectId: string): Promise<SortKey[]> {
+  const store = await getStore();
+  const data = await store.get<SortKey[]>(`sort_keys_${projectId}`);
+  return data ?? [];
+}
+
+export async function setSortKeys(projectId: string, keys: SortKey[]): Promise<void> {
+  const store = await getStore();
+  await store.set(`sort_keys_${projectId}`, keys);
   await store.save();
 }
 

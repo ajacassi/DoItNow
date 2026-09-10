@@ -9,9 +9,12 @@ import {
   setTableColumns,
   getStatusOrderReversed,
   setStatusOrderReversed,
+  getSortKeys,
+  setSortKeys,
   type SavedView,
 } from "../lib/store";
 import { defaultColumns, orderColumns } from "../lib/columns";
+import type { SortKey } from "../lib/sort";
 import ProjectTable from "./ProjectTable";
 import ProjectBoard from "./ProjectBoard";
 import ProjectGantt from "./ProjectGantt";
@@ -22,6 +25,7 @@ import LabelFilterSidebar from "./LabelFilterSidebar";
 import QueryInput from "./QueryInput";
 import SavedViewsBar from "./SavedViewsBar";
 import ColumnPicker from "./ColumnPicker";
+import SortPicker from "./SortPicker";
 
 interface Props {
   token: string;
@@ -97,6 +101,19 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
       setStatusOrderReversed(project.id, next);
       return next;
     });
+  }
+
+  // Composable multi-column sort within each status group in Table — one
+  // setting shared by every view of this project, like column visibility.
+  const [sortKeys, setSortKeysState] = useState<SortKey[]>([]);
+
+  useEffect(() => {
+    getSortKeys(project.id).then(setSortKeysState);
+  }, [project.id]);
+
+  function changeSortKeys(next: SortKey[]) {
+    setSortKeysState(next);
+    setSortKeys(project.id, next);
   }
 
   // Total issue count (all states) for the repo(s) actually linked to this
@@ -297,6 +314,7 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
             )}
           </button>
           {view === "table" && <ColumnPicker project={project} selected={visibleColumns} onToggle={toggleColumn} />}
+          {view === "table" && <SortPicker project={project} sortKeys={sortKeys} onChange={changeSortKeys} />}
           {(view === "table" || view === "gantt") && (
             <button
               onClick={toggleStatusOrder}
@@ -393,6 +411,7 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
               project={visibleProject}
               columns={orderColumns(project, visibleColumns)}
               reversed={statusOrderReversed}
+              sortKeys={sortKeys}
               onOpenItem={openItemDetail}
               onNewIssueForStatus={openNewIssue}
               onMoveItem={moveItemToStatus}
