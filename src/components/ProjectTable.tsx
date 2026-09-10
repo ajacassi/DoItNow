@@ -155,7 +155,7 @@ export default function ProjectTable({ project, columns: visibleColumns, reverse
 
   return (
     <div className="h-full overflow-y-auto px-8 py-6">
-      <div className="mx-auto max-w-5xl space-y-6">
+      <div className="space-y-6">
         {columns.map(([status, items]) => {
           const style = colorStyle(optionColor.get(status));
           const isCollapsed = collapsed[status];
