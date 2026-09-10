@@ -590,6 +590,7 @@ export interface RepoLabel {
   id: string;
   name: string;
   color: string;
+  description: string | null;
 }
 
 export interface RepoMilestone {
@@ -639,6 +640,8 @@ export interface IssueDetail {
   repoAssignableUsers: RepoUser[];
   /** Every project (v2) this issue is currently added to, not just the one currently open. */
   projectItems: IssueProjectLink[];
+  /** GraphQL node id of the repository — needed to create new labels. */
+  repositoryId: string;
   /** Legacy numeric repository id, required by GitHub's attachment upload endpoint. */
   repositoryDatabaseId: number;
 }
@@ -646,6 +649,7 @@ export interface IssueDetail {
 const ISSUE_DETAIL_QUERY = `
   query IssueDetail($owner: String!, $repo: String!, $number: Int!) {
     repository(owner: $owner, name: $repo) {
+      id
       databaseId
       issue(number: $number) {
         id
@@ -656,7 +660,7 @@ const ISSUE_DETAIL_QUERY = `
         url
         milestone { id title }
         assignees(first: 10) { nodes { id login avatarUrl } }
-        labels(first: 20) { nodes { id name color } }
+        labels(first: 20) { nodes { id name color description } }
         comments(first: 50) { nodes { id body createdAt author { login avatarUrl } } }
         subIssues(first: 25) {
           nodes {
@@ -675,7 +679,7 @@ const ISSUE_DETAIL_QUERY = `
           }
         }
       }
-      labels(first: 100) { nodes { id name color } }
+      labels(first: 100) { nodes { id name color description } }
       milestones(first: 50, states: [OPEN]) { nodes { id title } }
       assignableUsers(first: 100) { nodes { id login avatarUrl } }
     }
@@ -693,6 +697,7 @@ interface RawSubIssue {
 
 interface RawIssueDetailResponse {
   repository: {
+    id: string;
     databaseId: number;
     issue: {
       id: string;
@@ -754,8 +759,47 @@ export async function fetchIssueDetail(
       projectTitle: p.project.title,
       projectNumber: p.project.number,
     })),
+    repositoryId: data.repository!.id,
     repositoryDatabaseId: data.repository!.databaseId,
   };
+}
+
+export async function createRepoLabel(
+  token: string,
+  repositoryId: string,
+  name: string,
+  color: string,
+  description: string,
+): Promise<RepoLabel> {
+  const data = await graphql<{ createLabel: { label: RepoLabel } }>(
+    token,
+    `mutation($repositoryId: ID!, $name: String!, $color: String!, $description: String) {
+      createLabel(input: { repositoryId: $repositoryId, name: $name, color: $color, description: $description }) {
+        label { id name color description }
+      }
+    }`,
+    { repositoryId, name, color, description: description || null },
+  );
+  return data.createLabel.label;
+}
+
+export async function updateRepoLabel(
+  token: string,
+  labelId: string,
+  name: string,
+  color: string,
+  description: string,
+): Promise<RepoLabel> {
+  const data = await graphql<{ updateLabel: { label: RepoLabel } }>(
+    token,
+    `mutation($labelId: ID!, $name: String!, $color: String!, $description: String) {
+      updateLabel(input: { id: $labelId, name: $name, color: $color, description: $description }) {
+        label { id name color description }
+      }
+    }`,
+    { labelId, name, color, description: description || null },
+  );
+  return data.updateLabel.label;
 }
 
 export async function removeItemFromProject(token: string, projectId: string, itemId: string): Promise<void> {
@@ -1066,6 +1110,7 @@ export async function fetchRepoIssueCount(token: string, owner: string, name: st
 }
 
 export interface RepoMetadata {
+  repositoryId: string;
   labels: RepoLabel[];
   milestones: RepoMilestone[];
   assignableUsers: RepoUser[];
@@ -1074,7 +1119,8 @@ export interface RepoMetadata {
 const REPO_METADATA_QUERY = `
   query RepoMetadata($owner: String!, $repo: String!) {
     repository(owner: $owner, name: $repo) {
-      labels(first: 100) { nodes { id name color } }
+      id
+      labels(first: 100) { nodes { id name color description } }
       milestones(first: 50, states: [OPEN]) { nodes { id title } }
       assignableUsers(first: 100) { nodes { id login avatarUrl } }
     }
@@ -1083,6 +1129,7 @@ const REPO_METADATA_QUERY = `
 
 interface RawRepoMetadataResponse {
   repository: {
+    id: string;
     labels: { nodes: RepoLabel[] };
     milestones: { nodes: RepoMilestone[] };
     assignableUsers: { nodes: RepoUser[] };
@@ -1095,6 +1142,7 @@ export async function fetchRepoMetadata(token: string, owner: string, repo: stri
     throw new GithubApiError(`Repository ${owner}/${repo} non trovato.`);
   }
   return {
+    repositoryId: data.repository.id,
     labels: data.repository.labels.nodes,
     milestones: data.repository.milestones.nodes,
     assignableUsers: data.repository.assignableUsers.nodes,

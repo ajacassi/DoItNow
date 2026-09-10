@@ -26,6 +26,7 @@ import {
   type ProjectDetail,
   type ProjectItem,
   type IssueRef,
+  type RepoLabel,
 } from "../lib/github";
 import { colorStyle } from "../lib/colors";
 import MarkdownContent from "./MarkdownContent";
@@ -34,6 +35,7 @@ import ImageUploadButton from "./ImageUploadButton";
 import MentionTextarea from "./MentionTextarea";
 import SubIssuesSection from "./SubIssuesSection";
 import ExternalLink from "./ExternalLink";
+import LabelManager from "./LabelManager";
 
 interface Props {
   token: string;
@@ -68,6 +70,7 @@ export default function IssueDetailPanel({
   const [commentDraft, setCommentDraft] = useState("");
   const [postingComment, setPostingComment] = useState(false);
   const [editingBody, setEditingBody] = useState(false);
+  const [showLabelManager, setShowLabelManager] = useState(false);
 
   // Sub-issues aren't added to the project board, so an issue opened from a
   // Sub-issue list won't have a matching entry here — project-field editing
@@ -194,6 +197,24 @@ export default function IssueDetailPanel({
       setDetail({ ...detail, labels: nextLabels });
       if (projectItem) onItemChange(projectItem.id, { labels: nextLabels.map((l) => ({ name: l.name, color: l.color })) });
     });
+  }
+
+  function handleLabelCreated(label: RepoLabel) {
+    setDetail((d) => (d ? { ...d, repoLabels: [...d.repoLabels, label] } : d));
+  }
+
+  function handleLabelUpdated(label: RepoLabel) {
+    const wasOnIssue = detail?.labels.some((l) => l.id === label.id) ?? false;
+    setDetail((d) => {
+      if (!d) return d;
+      const repoLabels = d.repoLabels.map((l) => (l.id === label.id ? label : l));
+      const labels = d.labels.map((l) => (l.id === label.id ? label : l));
+      return { ...d, repoLabels, labels };
+    });
+    if (projectItem && wasOnIssue) {
+      const nextLabels = (detail?.labels ?? []).map((l) => (l.id === label.id ? label : l));
+      onItemChange(projectItem.id, { labels: nextLabels.map((l) => ({ name: l.name, color: l.color })) });
+    }
   }
 
   async function changeStatus(optionId: string) {
@@ -474,7 +495,12 @@ export default function IssueDetailPanel({
             </section>
 
             <section>
-              <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-neutral-500">Label</h3>
+              <div className="mb-1.5 flex items-center justify-between">
+                <h3 className="text-xs font-medium uppercase tracking-wide text-neutral-500">Label</h3>
+                <button onClick={() => setShowLabelManager(true)} className="text-xs text-neutral-500 hover:text-neutral-300">
+                  Gestisci label…
+                </button>
+              </div>
               <div className="flex flex-wrap gap-1.5">
                 {detail.labels.map((l) => (
                   <LabelChip key={l.id} name={l.name} color={l.color} onRemove={() => removeLabel(l.id)} />
@@ -651,6 +677,17 @@ export default function IssueDetailPanel({
           </div>
         )}
       </div>
+
+      {showLabelManager && detail && (
+        <LabelManager
+          token={token}
+          repositoryId={detail.repositoryId}
+          labels={detail.repoLabels}
+          onClose={() => setShowLabelManager(false)}
+          onCreated={handleLabelCreated}
+          onUpdated={handleLabelUpdated}
+        />
+      )}
     </div>
   );
 }

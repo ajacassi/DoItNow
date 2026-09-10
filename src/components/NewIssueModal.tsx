@@ -21,10 +21,12 @@ import {
   type ProjectItem,
   type ItemFieldValue,
   type CreatedIssue,
+  type RepoLabel,
 } from "../lib/github";
 import MentionTextarea from "./MentionTextarea";
 import LabelChip from "./LabelChip";
 import ImageUploadButton from "./ImageUploadButton";
+import LabelManager from "./LabelManager";
 
 interface Props {
   token: string;
@@ -56,6 +58,7 @@ export default function NewIssueModal({
   const [repoId, setRepoId] = useState("");
   const [metadata, setMetadata] = useState<RepoMetadata | null>(null);
   const [metadataLoading, setMetadataLoading] = useState(false);
+  const [showLabelManager, setShowLabelManager] = useState(false);
 
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -103,6 +106,14 @@ export default function NewIssueModal({
 
   function setFieldInput(name: string, value: string) {
     setFieldInputs((f) => ({ ...f, [name]: value }));
+  }
+
+  function handleLabelCreated(label: RepoLabel) {
+    setMetadata((m) => (m ? { ...m, labels: [...m.labels, label] } : m));
+  }
+
+  function handleLabelUpdated(label: RepoLabel) {
+    setMetadata((m) => (m ? { ...m, labels: m.labels.map((l) => (l.id === label.id ? label : l)) } : m));
   }
 
   async function handleCreate() {
@@ -328,23 +339,30 @@ export default function NewIssueModal({
               </div>
             )}
 
-            <label className="mt-4 block text-xs font-medium uppercase tracking-wide text-neutral-500">
-              Label
-              <select
-                value=""
-                onChange={(e) => e.target.value && setLabelIds((ids) => [...ids, e.target.value])}
-                className="mt-1 block w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-400"
+            <div className="mt-4 flex items-center justify-between">
+              <span className="block text-xs font-medium uppercase tracking-wide text-neutral-500">Label</span>
+              <button
+                type="button"
+                onClick={() => setShowLabelManager(true)}
+                className="text-xs text-neutral-500 hover:text-neutral-300"
               >
-                <option value="">+ Aggiungi</option>
-                {metadata.labels
-                  .filter((l) => !labelIds.includes(l.id))
-                  .map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name}
-                    </option>
-                  ))}
-              </select>
-            </label>
+                Gestisci label…
+              </button>
+            </div>
+            <select
+              value=""
+              onChange={(e) => e.target.value && setLabelIds((ids) => [...ids, e.target.value])}
+              className="mt-1 block w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-400"
+            >
+              <option value="">+ Aggiungi</option>
+              {metadata.labels
+                .filter((l) => !labelIds.includes(l.id))
+                .map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+            </select>
             {labelIds.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {labelIds.map((id) => {
@@ -464,6 +482,17 @@ export default function NewIssueModal({
           </button>
         </div>
       </div>
+
+      {showLabelManager && metadata && (
+        <LabelManager
+          token={token}
+          repositoryId={repoId}
+          labels={metadata.labels}
+          onClose={() => setShowLabelManager(false)}
+          onCreated={handleLabelCreated}
+          onUpdated={handleLabelUpdated}
+        />
+      )}
     </div>
   );
 }
