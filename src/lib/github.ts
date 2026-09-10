@@ -161,7 +161,16 @@ export interface ProjectDetail {
   fields: ProjectField[];
   /** Fields in `fields` that are actually Issue Fields (org-level) must be written via updateIssueFieldValue, keyed by field name. */
   issueFieldsByName: Record<string, IssueFieldDef>;
-  /** Repositories linked to this project via its own Settings > Repositories list (not derived from item content). */
+  /**
+   * Every repository referenced by `project.repositories` — NOT a curated
+   * allowlist, it also picks up any repo a stray item happens to come from.
+   * GitHub's own "Default repository" project setting (Project settings >
+   * Default repository) would be the correct single source for "the" repo
+   * this project is for, but it isn't exposed on ProjectV2 in the GraphQL
+   * API yet (confirmed: querying `defaultRepository` errors with "Field
+   * 'defaultRepository' doesn't exist on type 'ProjectV2'") — so this is the
+   * best available substitute until GitHub adds it.
+   */
   linkedRepos: { owner: string; name: string }[];
   items: ProjectItem[];
 }
@@ -592,6 +601,29 @@ export function groupItemsByStatus(project: ProjectDetail): Map<string, ProjectI
 export function visibleStatusEntries(groups: Map<string, ProjectItem[]>, reversed: boolean): [string, ProjectItem[]][] {
   const entries = Array.from(groups.entries()).filter(([, items]) => items.length > 0);
   return reversed ? entries.reverse() : entries;
+}
+
+/**
+ * The repo most of this project's items actually live in — a stand-in for
+ * GitHub's "Default repository" project setting, which isn't queryable yet
+ * (confirmed: `defaultRepository` doesn't exist on ProjectV2 in the GraphQL
+ * schema). Reliable as long as most items share one repo; a couple of stray
+ * issues from elsewhere don't throw it off.
+ */
+export function mostCommonRepo(project: ProjectDetail): { owner: string; name: string } | null {
+  const counts = new Map<string, { owner: string; name: string; count: number }>();
+  for (const item of project.items) {
+    if (!item.repository || !item.repositoryOwner) continue;
+    const key = `${item.repositoryOwner}/${item.repository}`;
+    const entry = counts.get(key);
+    if (entry) entry.count++;
+    else counts.set(key, { owner: item.repositoryOwner, name: item.repository, count: 1 });
+  }
+  let best: { owner: string; name: string; count: number } | null = null;
+  for (const entry of counts.values()) {
+    if (!best || entry.count > best.count) best = entry;
+  }
+  return best ? { owner: best.owner, name: best.name } : null;
 }
 
 export { NO_STATUS };
@@ -1109,9 +1141,10 @@ export interface RepoSummary {
 }
 
 const ORG_REPOS_QUERY = `
-  query OrgRepos($org: String!) {
+  query OrgRepos($org: String!, $after: String) {
     organization(login: $org) {
-      repositories(first: 100, orderBy: { field: NAME, direction: ASC }) {
+      repositories(first: 100, after: $after, orderBy: { field: NAME, direction: ASC }) {
+        pageInfo { hasNextPage endCursor }
         nodes { id databaseId name }
       }
     }
@@ -1119,12 +1152,23 @@ const ORG_REPOS_QUERY = `
 `;
 
 export async function fetchOrgRepos(token: string, org: string): Promise<RepoSummary[]> {
-  const data = await graphql<{ organization: { repositories: { nodes: RepoSummary[] } } | null }>(
-    token,
-    ORG_REPOS_QUERY,
-    { org },
-  );
-  return data.organization?.repositories.nodes ?? [];
+  const all: RepoSummary[] = [];
+  let after: string | null = null;
+  let safety = 0;
+  while (safety < 50) {
+    safety++;
+    const data: { organization: { repositories: { pageInfo: RawPageInfo; nodes: RepoSummary[] } } | null } = await graphql(
+      token,
+      ORG_REPOS_QUERY,
+      { org, after },
+    );
+    const repos = data.organization?.repositories;
+    if (!repos) break;
+    all.push(...repos.nodes);
+    if (!repos.pageInfo.hasNextPage || !repos.pageInfo.endCursor) break;
+    after = repos.pageInfo.endCursor;
+  }
+  return all;
 }
 
 const REPO_ISSUE_COUNT_QUERY = `

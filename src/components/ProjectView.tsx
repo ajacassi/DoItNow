@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectDetail, ProjectItem, IssueRef } from "../lib/github";
-import { setProjectFieldSingleSelect, fetchRepoIssueCount } from "../lib/github";
+import { setProjectFieldSingleSelect, fetchRepoIssueCount, mostCommonRepo } from "../lib/github";
 import { parseIssueQuery, matchesIssueQuery } from "../lib/query";
 import {
   getProjectViewState,
@@ -116,22 +116,22 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
     setSortKeys(project.id, next);
   }
 
-  // Total issue count (all states) for the repo(s) actually linked to this
-  // project (project.linkedRepos, from its Settings > Repositories list) —
-  // NOT derived from item content, so a stray issue added to the project (or
-  // a sub-issue) from an unrelated repo never inflates the count.
+  // Total issue count (all states) for the repo most of this project's items
+  // actually live in (see mostCommonRepo) — a stand-in for GitHub's own
+  // "Default repository" setting, which isn't exposed on ProjectV2 in the
+  // GraphQL API yet.
+  const badgeRepo = mostCommonRepo(project);
   const [repoIssueCount, setRepoIssueCount] = useState<number | null>(null);
 
   useEffect(() => {
-    const repos = project.linkedRepos;
-    if (repos.length === 0) {
+    if (!badgeRepo) {
       setRepoIssueCount(null);
       return;
     }
     let cancelled = false;
-    Promise.all(repos.map((r) => fetchRepoIssueCount(token, r.owner, r.name)))
-      .then((counts) => {
-        if (!cancelled) setRepoIssueCount(counts.reduce((a, b) => a + b, 0));
+    fetchRepoIssueCount(token, badgeRepo.owner, badgeRepo.name)
+      .then((count) => {
+        if (!cancelled) setRepoIssueCount(count);
       })
       .catch(() => {
         if (!cancelled) setRepoIssueCount(null);
@@ -139,7 +139,7 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
     return () => {
       cancelled = true;
     };
-  }, [token, project.linkedRepos]);
+  }, [token, badgeRepo?.owner, badgeRepo?.name]);
 
   // While a saved view is active, keep it in sync with whatever filters are
   // currently set — editing the query/labels/mode of an active view updates
@@ -281,12 +281,9 @@ export default function ProjectView({ token, org, project, onBack, onRefresh, re
             ← Progetti
           </button>
           <h1 className="text-lg font-semibold tracking-tight">{project.title}</h1>
-          {repoIssueCount !== null && (
-            <span
-              className="text-xs text-neutral-600"
-              title={project.linkedRepos.length > 1 ? project.linkedRepos.map((r) => `${r.owner}/${r.name}`).join(", ") : undefined}
-            >
-              {repoIssueCount} issue {project.linkedRepos.length > 1 ? "nei repo collegati" : "nel repo"}
+          {repoIssueCount !== null && badgeRepo && (
+            <span className="text-xs text-neutral-600" title={`${badgeRepo.owner}/${badgeRepo.name}`}>
+              {repoIssueCount} issue nel repo
             </span>
           )}
         </div>

@@ -6,6 +6,7 @@ import {
   addIssueToProject,
   addSubIssue,
   setProjectFieldSingleSelect,
+  setProjectFieldMultiSelect,
   setProjectFieldDate,
   setProjectFieldText,
   setProjectFieldNumber,
@@ -15,6 +16,7 @@ import {
   setIssueFieldNumber,
   GithubApiError,
   NO_STATUS,
+  mostCommonRepo,
   type RepoSummary,
   type RepoMetadata,
   type ProjectDetail,
@@ -23,6 +25,8 @@ import {
   type CreatedIssue,
   type RepoLabel,
 } from "../lib/github";
+import { realProjectFields } from "../lib/columns";
+import { colorStyle } from "../lib/colors";
 import MentionTextarea from "./MentionTextarea";
 import LabelChip from "./LabelChip";
 import ImageUploadButton from "./ImageUploadButton";
@@ -67,6 +71,7 @@ export default function NewIssueModal({
   const [milestoneId, setMilestoneId] = useState("");
   const [statusId, setStatusId] = useState(initialStatusId ?? "");
   const [fieldInputs, setFieldInputs] = useState<Record<string, string>>({});
+  const [multiFieldInputs, setMultiFieldInputs] = useState<Record<string, string[]>>({});
 
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,10 +82,16 @@ export default function NewIssueModal({
     fetchOrgRepos(token, org)
       .then((r) => {
         setRepos(r);
-        if (initialRepoName) {
-          const match = r.find((x) => x.name === initialRepoName);
-          if (match) setRepoId(match.id);
-        }
+        // Prefer the repo explicitly requested (e.g. "create sub-issue" from a
+        // known repo); otherwise default to whichever repo most of the
+        // project's own issues actually live in. GitHub's "Default repository"
+        // project setting would be the correct source for this, but it isn't
+        // exposed on ProjectV2 in the GraphQL API yet — the item-majority repo
+        // is a reliable stand-in as long as most items share one repo, and a
+        // couple of stray issues from elsewhere don't throw it off.
+        const preferredName = initialRepoName ?? mostCommonRepo(project)?.name;
+        const match = preferredName ? r.find((x) => x.name === preferredName) : undefined;
+        if (match) setRepoId(match.id);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Impossibile caricare i repository."))
       .finally(() => setReposLoading(false));
@@ -150,9 +161,19 @@ export default function NewIssueModal({
 
         const fieldsPatch: Record<string, ItemFieldValue> = {};
         for (const f of project.fields) {
+          const issueField = project.issueFieldsByName[f.name];
+
+          if (f.dataType === "MULTI_SELECT") {
+            const optionIds = multiFieldInputs[f.name];
+            if (!optionIds || optionIds.length === 0) continue;
+            const selected = (f.options ?? []).filter((o) => optionIds.includes(o.id));
+            await setProjectFieldMultiSelect(token, project.id, itemId, f.id, optionIds);
+            fieldsPatch[f.name] = { type: "multiSelect", options: selected.map((o) => ({ name: o.name, color: o.color })) };
+            continue;
+          }
+
           const raw = fieldInputs[f.name];
           if (!raw) continue;
-          const issueField = project.issueFieldsByName[f.name];
 
           if (f.dataType === "SINGLE_SELECT") {
             const options = issueField?.options ?? f.options;
@@ -212,7 +233,8 @@ export default function NewIssueModal({
     }
   }
 
-  const editableFields = project.fields.filter((f) => ["SINGLE_SELECT", "DATE", "TEXT", "NUMBER"].includes(f.dataType));
+  const editableFields = realProjectFields(project);
+  const KNOWN_FIELD_TYPES = new Set(["SINGLE_SELECT", "MULTI_SELECT", "DATE", "NUMBER", "TEXT"]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
@@ -423,6 +445,48 @@ export default function NewIssueModal({
                             ))}
                           </select>
                         </label>
+                      );
+                    }
+                    if (f.dataType === "MULTI_SELECT") {
+                      const options = f.options ?? [];
+                      const selectedIds = new Set(multiFieldInputs[f.name] ?? []);
+                      function toggle(optionId: string) {
+                        setMultiFieldInputs((prev) => {
+                          const current = prev[f.name] ?? [];
+                          const next = selectedIds.has(optionId) ? current.filter((id) => id !== optionId) : [...current, optionId];
+                          return { ...prev, [f.name]: next };
+                        });
+                      }
+                      return (
+                        <div key={f.id} className="text-xs text-neutral-500">
+                          {f.name}
+                          <div className="mt-1 flex flex-wrap gap-1.5 rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5">
+                            {options.length === 0 && <span className="text-neutral-700">—</span>}
+                            {options.map((o) => {
+                              const active = selectedIds.has(o.id);
+                              const style = colorStyle(o.color);
+                              return (
+                                <button
+                                  key={o.id}
+                                  type="button"
+                                  onClick={() => toggle(o.id)}
+                                  className={`rounded-full border px-2 py-0.5 text-[11px] transition ${
+                                    active ? `${style.bg} ${style.text} ${style.border}` : "border-neutral-800 text-neutral-600 hover:border-neutral-600"
+                                  }`}
+                                >
+                                  {o.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    }
+                    if (!KNOWN_FIELD_TYPES.has(f.dataType)) {
+                      return (
+                        <p key={f.id} className="text-xs text-neutral-600">
+                          {f.name} <span className="text-neutral-700">({f.dataType}, impostabile solo dopo la creazione)</span>
+                        </p>
                       );
                     }
                     if (f.dataType === "DATE") {
