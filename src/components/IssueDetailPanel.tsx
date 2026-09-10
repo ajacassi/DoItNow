@@ -11,6 +11,7 @@ import {
   removeIssueLabel,
   addIssueComment,
   setProjectFieldSingleSelect,
+  setProjectFieldMultiSelect,
   setProjectFieldDate,
   setProjectFieldText,
   setProjectFieldNumber,
@@ -29,6 +30,7 @@ import {
   type RepoLabel,
 } from "../lib/github";
 import { colorStyle } from "../lib/colors";
+import { realProjectFields } from "../lib/columns";
 import MarkdownContent from "./MarkdownContent";
 import LabelChip from "./LabelChip";
 import ImageUploadButton from "./ImageUploadButton";
@@ -250,6 +252,22 @@ export default function IssueDetailPanel({
     });
   }
 
+  async function changeMultiSelectField(fieldId: string, fieldName: string, optionIds: string[]) {
+    if (!projectItem) return;
+    await guarded(async () => {
+      await setProjectFieldMultiSelect(token, project.id, projectItem.id, fieldId, optionIds);
+      const options = project.fields.find((f) => f.id === fieldId)?.options ?? [];
+      const selected = options.filter((o) => optionIds.includes(o.id)).map((o) => ({ name: o.name, color: o.color }));
+      if (selected.length === 0) {
+        const next = { ...projectItem.fields };
+        delete next[fieldName];
+        onItemChange(projectItem.id, { fields: next });
+      } else {
+        onItemChange(projectItem.id, { fields: { ...projectItem.fields, [fieldName]: { type: "multiSelect", options: selected } } });
+      }
+    });
+  }
+
   async function changeDateField(fieldId: string, fieldName: string, value: string) {
     if (!projectItem) return;
     const issueField = project.issueFieldsByName[fieldName];
@@ -329,7 +347,13 @@ export default function IssueDetailPanel({
     });
   }
 
-  const editableFields = project.fields.filter((f) => ["SINGLE_SELECT", "DATE", "TEXT", "NUMBER"].includes(f.dataType));
+  // Every true custom project field shows up here (GitHub's own reflected
+  // fields like Title/Assignees/Milestone are excluded — they have their own
+  // dedicated sections above). The ones this app knows how to render/edit
+  // (SINGLE_SELECT/DATE/NUMBER, TEXT as the fallback) get a real input;
+  // anything else falls back to a read-only row rather than being silently missing.
+  const editableFields = realProjectFields(project);
+  const KNOWN_FIELD_TYPES = new Set(["SINGLE_SELECT", "MULTI_SELECT", "DATE", "NUMBER", "TEXT"]);
   const statusStyle = colorStyle(project.statusOptions.find((o) => o.name === projectItem?.status)?.color);
 
   return (
@@ -550,6 +574,41 @@ export default function IssueDetailPanel({
                         </label>
                       );
                     }
+                    if (f.dataType === "MULTI_SELECT") {
+                      const options = f.options ?? [];
+                      const selectedNames = new Set(value?.type === "multiSelect" ? value.options.map((o) => o.name) : []);
+                      function toggle(option: NonNullable<typeof f.options>[number]) {
+                        const currentIds = options.filter((o) => selectedNames.has(o.name)).map((o) => o.id);
+                        const nextIds = selectedNames.has(option.name)
+                          ? currentIds.filter((id) => id !== option.id)
+                          : [...currentIds, option.id];
+                        changeMultiSelectField(f.id, f.name, nextIds);
+                      }
+                      return (
+                        <div key={f.id} className="text-xs text-neutral-500">
+                          {f.name}
+                          <div className="mt-1 flex flex-wrap gap-1.5 rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5">
+                            {options.length === 0 && <span className="text-neutral-700">—</span>}
+                            {options.map((o) => {
+                              const active = selectedNames.has(o.name);
+                              const style = colorStyle(o.color);
+                              return (
+                                <button
+                                  key={o.id}
+                                  type="button"
+                                  onClick={() => toggle(o)}
+                                  className={`rounded-full border px-2 py-0.5 text-[11px] transition ${
+                                    active ? `${style.bg} ${style.text} ${style.border}` : "border-neutral-800 text-neutral-600 hover:border-neutral-600"
+                                  }`}
+                                >
+                                  {o.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    }
                     if (f.dataType === "DATE") {
                       return (
                         <label key={f.id} className="text-xs text-neutral-500">
@@ -574,6 +633,16 @@ export default function IssueDetailPanel({
                             className="mt-1 block w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
                           />
                         </label>
+                      );
+                    }
+                    if (!KNOWN_FIELD_TYPES.has(f.dataType)) {
+                      return (
+                        <div key={f.id} className="text-xs text-neutral-500">
+                          {f.name} <span className="text-neutral-700">({f.dataType}, non ancora supportato)</span>
+                          <p className="mt-1 rounded-lg border border-dashed border-neutral-800 px-2 py-1.5 text-sm text-neutral-600">
+                            {value && value.type === "text" ? value.text : "—"}
+                          </p>
+                        </div>
                       );
                     }
                     return (

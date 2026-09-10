@@ -111,6 +111,7 @@ export interface IssueFieldDef {
 
 export type ItemFieldValue =
   | { type: "singleSelect"; name: string; color: string }
+  | { type: "multiSelect"; options: { name: string; color: string }[] }
   | { type: "date"; date: string }
   | { type: "text"; text: string }
   | { type: "number"; number: number };
@@ -174,6 +175,15 @@ const PROJECT_ITEM_FRAGMENT = `
         ... on ProjectV2ItemFieldSingleSelectValue {
           name
           color
+          field {
+            ... on ProjectV2FieldCommon { name }
+          }
+        }
+        ... on ProjectV2ItemFieldMultiSelectValue {
+          options {
+            name
+            color
+          }
           field {
             ... on ProjectV2FieldCommon { name }
           }
@@ -252,7 +262,7 @@ const PROJECT_ITEM_FRAGMENT = `
 const PROJECT_ITEMS_QUERY = `
   query ProjectItems($org: String!, $number: Int!) {
     organization(login: $org) {
-      issueFields(first: 50) {
+      issueFields(first: 100) {
         nodes {
           __typename
           ... on IssueFieldCommon {
@@ -276,7 +286,7 @@ const PROJECT_ITEMS_QUERY = `
         id
         title
         url
-        fields(first: 30) {
+        fields(first: 100) {
           nodes {
             ... on ProjectV2FieldCommon {
               id
@@ -285,6 +295,13 @@ const PROJECT_ITEMS_QUERY = `
             }
             ... on ProjectV2SingleSelectField {
               options {
+                id
+                name
+                color
+              }
+            }
+            ... on ProjectV2MultiSelectField {
+              options: multiSelectOptions {
                 id
                 name
                 color
@@ -339,6 +356,7 @@ interface RawFieldValue {
   date?: string;
   text?: string;
   number?: number;
+  options?: Array<{ name: string; color: string }>;
   field?: { name?: string } | null;
   issueFieldValue?: RawIssueFieldValue | null;
 }
@@ -419,6 +437,8 @@ function parseFieldValue(raw: RawFieldValue): ItemFieldValue | null {
   switch (raw.__typename) {
     case "ProjectV2ItemFieldSingleSelectValue":
       return raw.name != null && raw.color != null ? { type: "singleSelect", name: raw.name, color: raw.color } : null;
+    case "ProjectV2ItemFieldMultiSelectValue":
+      return raw.options ? { type: "multiSelect", options: raw.options } : null;
     case "ProjectV2ItemFieldDateValue":
       return raw.date != null ? { type: "date", date: raw.date } : null;
     case "ProjectV2ItemFieldTextValue":
@@ -914,6 +934,24 @@ export async function setProjectFieldSingleSelect(
       }
     }`,
     { projectId, itemId, fieldId, optionId },
+  );
+}
+
+export async function setProjectFieldMultiSelect(
+  token: string,
+  projectId: string,
+  itemId: string,
+  fieldId: string,
+  optionIds: string[],
+): Promise<void> {
+  await graphql(
+    token,
+    `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionIds: [String!]!) {
+      updateProjectV2ItemFieldValue(input: { projectId: $projectId, itemId: $itemId, fieldId: $fieldId, value: { multiSelectOptionIds: $optionIds } }) {
+        clientMutationId
+      }
+    }`,
+    { projectId, itemId, fieldId, optionIds },
   );
 }
 

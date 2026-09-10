@@ -33,6 +33,8 @@ const RESERVED_FIELD_NAMES = new Set([
   "linked pull requests",
   "tracks",
   "tracked by",
+  "parent issue",
+  "sub-issues progress",
 ]);
 
 export interface ColumnOption {
@@ -40,11 +42,21 @@ export interface ColumnOption {
   label: string;
 }
 
+// The custom fields actually worth surfacing as a column or an editable row:
+// GitHub's own reflected/mirrored fields (Title, Assignees, Milestone, ...)
+// are excluded — they're either already handled by a dedicated built-in
+// (assignee/created/updated/closed) or by their own section of the issue
+// panel (title, labels, milestone), and their per-item values don't come
+// through the generic custom-field value types anyway. Whatever dataType
+// remains is still included — SINGLE_SELECT/DATE/TEXT/NUMBER render their
+// real value, anything else still shows up (read-only, "—") rather than
+// being silently invisible, until that type gets explicit support.
+export function realProjectFields(project: ProjectDetail) {
+  return project.fields.filter((f) => !RESERVED_FIELD_NAMES.has(f.name.toLowerCase()));
+}
+
 function customFieldColumns(project: ProjectDetail): ColumnOption[] {
-  return project.fields
-    .filter((f) => ["SINGLE_SELECT", "DATE", "TEXT", "NUMBER"].includes(f.dataType))
-    .filter((f) => !RESERVED_FIELD_NAMES.has(f.name.toLowerCase()))
-    .map((f) => ({ key: f.name, label: f.name }));
+  return realProjectFields(project).map((f) => ({ key: f.name, label: f.name }));
 }
 
 export function availableColumns(project: ProjectDetail): ColumnOption[] {

@@ -111,6 +111,21 @@ function FieldCell({ field, value }: { field: ProjectField; value: ItemFieldValu
       </span>
     );
   }
+  if (field.dataType === "MULTI_SELECT") {
+    if (value?.type !== "multiSelect" || value.options.length === 0) return <span className="text-neutral-700">—</span>;
+    return (
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        {value.options.map((o) => {
+          const style = colorStyle(o.color);
+          return (
+            <span key={o.name} className={`text-xs ${style.text}`}>
+              {o.name}
+            </span>
+          );
+        })}
+      </div>
+    );
+  }
   if (field.dataType === "NUMBER") {
     return value?.type === "number" ? <span className="text-xs text-neutral-300">{value.number}</span> : <span className="text-neutral-700">—</span>;
   }

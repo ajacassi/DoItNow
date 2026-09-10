@@ -21,6 +21,8 @@ function fieldSortValue(project: ProjectDetail, fieldName: string, value: ItemFi
       const idx = fieldDef?.options?.findIndex((o) => o.name === value.name) ?? -1;
       return idx >= 0 ? idx : value.name;
     }
+    case "multiSelect":
+      return value.options.length ? value.options.map((o) => o.name).sort().join(", ") : null;
     case "date":
       return value.date;
     case "number":

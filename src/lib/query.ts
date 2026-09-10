@@ -145,6 +145,8 @@ function evaluateTerm(field: string | null, rawValue: string, item: ProjectItem,
       switch (fv.type) {
         case "singleSelect":
           return fv.name.toLowerCase() === value;
+        case "multiSelect":
+          return fv.options.some((o) => o.name.toLowerCase() === value);
         case "text":
           return fv.text.toLowerCase().includes(value);
         case "number":
