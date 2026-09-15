@@ -1040,6 +1040,203 @@ export async function setIssueMilestone(token: string, issueId: string, mileston
   );
 }
 
+// ---------------------------------------------------------------------------
+// Milestones management — reads go through GraphQL (cheap: list fetch is a
+// single call with server-computed open/closed counts, no per-issue cost;
+// an individual milestone's issue list is only fetched on demand when the
+// user opens it). Writes (create/update/delete) go through GitHub's REST API
+// instead: confirmed against GitHub's public GraphQL schema that no
+// createMilestone/updateMilestone/deleteMilestone mutation exists there —
+// milestone mutation is REST-only.
+// ---------------------------------------------------------------------------
+
+export interface MilestoneSummary {
+  /** GraphQL node id — usable directly with setIssueMilestone. */
+  id: string;
+  number: number;
+  title: string;
+  description: string;
+  state: "OPEN" | "CLOSED";
+  /** ISO date-time, or null if no due date is set. */
+  dueOn: string | null;
+  url: string;
+  openIssueCount: number;
+  closedIssueCount: number;
+}
+
+const REPO_MILESTONES_QUERY = `
+  query RepoMilestones($owner: String!, $repo: String!) {
+    repository(owner: $owner, name: $repo) {
+      milestones(first: 100, states: [OPEN, CLOSED], orderBy: { field: DUE_DATE, direction: ASC }) {
+        nodes {
+          id
+          number
+          title
+          description
+          state
+          dueOn
+          url
+          openIssueCount
+          closedIssueCount
+        }
+      }
+    }
+  }
+`;
+
+interface RawMilestonesResponse {
+  repository: { milestones: { nodes: Array<Omit<MilestoneSummary, "description"> & { description: string | null }> } } | null;
+}
+
+export async function fetchRepoMilestones(token: string, owner: string, repo: string): Promise<MilestoneSummary[]> {
+  const data = await graphql<RawMilestonesResponse>(token, REPO_MILESTONES_QUERY, { owner, repo });
+  return (data.repository?.milestones.nodes ?? []).map((m) => ({ ...m, description: m.description ?? "" }));
+}
+
+const MILESTONE_ISSUES_QUERY = `
+  query MilestoneIssues($owner: String!, $repo: String!, $number: Int!, $after: String) {
+    repository(owner: $owner, name: $repo) {
+      milestone(number: $number) {
+        issues(first: 50, after: $after, orderBy: { field: CREATED_AT, direction: DESC }) {
+          pageInfo { hasNextPage endCursor }
+          nodes {
+            id
+            number
+            title
+            state
+            url
+            repository { name owner { login } }
+          }
+        }
+      }
+    }
+  }
+`;
+
+interface RawMilestoneIssuesResponse {
+  repository: {
+    milestone: { issues: { pageInfo: RawPageInfo; nodes: RawSubIssue[] } } | null;
+  } | null;
+}
+
+/** Every issue currently in the given milestone (paginated, 50-page safety cap). */
+export async function fetchMilestoneIssues(token: string, owner: string, repo: string, number: number): Promise<SubIssueSummary[]> {
+  const all: RawSubIssue[] = [];
+  let after: string | null = null;
+  for (let page = 0; page < 50; page++) {
+    const data: RawMilestoneIssuesResponse = await graphql<RawMilestoneIssuesResponse>(token, MILESTONE_ISSUES_QUERY, {
+      owner,
+      repo,
+      number,
+      after,
+    });
+    const issues = data.repository?.milestone?.issues;
+    if (!issues) break;
+    all.push(...issues.nodes);
+    if (!issues.pageInfo.hasNextPage) break;
+    after = issues.pageInfo.endCursor;
+  }
+  return all.map((s) => ({
+    id: s.id,
+    number: s.number,
+    title: s.title,
+    state: s.state,
+    url: s.url,
+    repository: s.repository.name,
+    repositoryOwner: s.repository.owner.login,
+  }));
+}
+
+export interface MilestoneInput {
+  title: string;
+  description: string;
+  /** "YYYY-MM-DD", or null to clear/leave unset. */
+  dueOn: string | null;
+  state: "open" | "closed";
+}
+
+interface RawRestMilestone {
+  node_id: string;
+  number: number;
+  title: string;
+  description: string | null;
+  state: "open" | "closed";
+  due_on: string | null;
+  html_url: string;
+  open_issues: number;
+  closed_issues: number;
+}
+
+function mapRestMilestone(m: RawRestMilestone): MilestoneSummary {
+  return {
+    id: m.node_id,
+    number: m.number,
+    title: m.title,
+    description: m.description ?? "",
+    state: m.state === "closed" ? "CLOSED" : "OPEN",
+    dueOn: m.due_on,
+    url: m.html_url,
+    openIssueCount: m.open_issues,
+    closedIssueCount: m.closed_issues,
+  };
+}
+
+async function milestoneRestCall(
+  token: string,
+  method: "POST" | "PATCH" | "DELETE",
+  url: string,
+  body?: Record<string, unknown>,
+): Promise<Response> {
+  const res = await fetch(url, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    throw new GithubApiError(
+      res.status === 422
+        ? "GitHub ha rifiutato i dati della milestone (titolo duplicato o non valido?)."
+        : `GitHub API ha risposto ${res.status}`,
+      res.status,
+    );
+  }
+  return res;
+}
+
+export async function createMilestone(token: string, owner: string, repo: string, input: MilestoneInput): Promise<MilestoneSummary> {
+  const res = await milestoneRestCall(token, "POST", `https://api.github.com/repos/${owner}/${repo}/milestones`, {
+    title: input.title,
+    description: input.description || undefined,
+    due_on: input.dueOn ? `${input.dueOn}T00:00:00Z` : undefined,
+    state: input.state,
+  });
+  return mapRestMilestone(await res.json());
+}
+
+export async function updateMilestone(
+  token: string,
+  owner: string,
+  repo: string,
+  number: number,
+  input: Partial<MilestoneInput>,
+): Promise<MilestoneSummary> {
+  const res = await milestoneRestCall(token, "PATCH", `https://api.github.com/repos/${owner}/${repo}/milestones/${number}`, {
+    ...(input.title !== undefined ? { title: input.title } : {}),
+    ...(input.description !== undefined ? { description: input.description } : {}),
+    ...(input.dueOn !== undefined ? { due_on: input.dueOn ? `${input.dueOn}T00:00:00Z` : null } : {}),
+    ...(input.state !== undefined ? { state: input.state } : {}),
+  });
+  return mapRestMilestone(await res.json());
+}
+
+export async function deleteMilestone(token: string, owner: string, repo: string, number: number): Promise<void> {
+  await milestoneRestCall(token, "DELETE", `https://api.github.com/repos/${owner}/${repo}/milestones/${number}`);
+}
+
 export async function addIssueAssignee(token: string, issueId: string, userId: string): Promise<void> {
   await graphql(
     token,

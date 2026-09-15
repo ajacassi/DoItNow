@@ -26,6 +26,8 @@ import QueryInput from "./QueryInput";
 import SavedViewsBar from "./SavedViewsBar";
 import ColumnPicker from "./ColumnPicker";
 import SortPicker from "./SortPicker";
+import MilestonesManager from "./MilestonesManager";
+import NotificationsButton from "./NotificationsButton";
 
 interface Props {
   token: string;
@@ -38,6 +40,8 @@ interface Props {
   onItemAdded: (item: ProjectItem) => void;
   onItemRemoved: (itemId: string) => void;
   onFieldOptionsChanged: (fieldId: string, options: StatusOption[]) => void;
+  onOpenNotifications: () => void;
+  notificationsRefreshKey: number;
 }
 
 type ViewMode = "table" | "board" | "gantt";
@@ -53,12 +57,15 @@ export default function ProjectView({
   onItemAdded,
   onItemRemoved,
   onFieldOptionsChanged,
+  onOpenNotifications,
+  notificationsRefreshKey,
 }: Props) {
   const [view, setView] = useState<ViewMode>("table");
   const [openIssueRef, setOpenIssueRef] = useState<IssueRef | null>(null);
   const [newIssueStatusId, setNewIssueStatusId] = useState<string | null>(null);
   const [showNewIssue, setShowNewIssue] = useState(false);
   const [showCleanup, setShowCleanup] = useState(false);
+  const [showMilestones, setShowMilestones] = useState(false);
   const [showLabelFilter, setShowLabelFilter] = useState(false);
   const [selectedLabels, setSelectedLabels] = useState<Set<string>>(new Set());
   const [queryText, setQueryText] = useState("");
@@ -367,6 +374,14 @@ export default function ProjectView({
             {refreshing ? "Aggiorno…" : "Aggiorna"}
           </button>
           <button
+            onClick={() => setShowMilestones(true)}
+            title="Gestisci le milestone del repository: crea, modifica, elimina, assegna issue"
+            className="rounded-lg border border-neutral-800 px-2.5 py-1.5 text-xs text-neutral-300 transition hover:border-neutral-500"
+          >
+            🎯 Milestone
+          </button>
+          <NotificationsButton token={token} onOpen={onOpenNotifications} refreshKey={notificationsRefreshKey} />
+          <button
             onClick={() => setShowCleanup(true)}
             title="Seleziona issue con una query per scollegarle o eliminarle in blocco — azione separata, ad accesso volontario"
             className="ml-1 rounded-lg border border-neutral-800 px-2 py-1.5 text-xs text-neutral-600 transition hover:border-amber-800 hover:text-amber-500"
@@ -471,6 +486,17 @@ export default function ProjectView({
 
       {showCleanup && (
         <ProjectCleanup token={token} project={project} onClose={() => setShowCleanup(false)} onItemRemoved={onItemRemoved} />
+      )}
+
+      {showMilestones && (
+        <MilestonesManager
+          token={token}
+          org={org}
+          project={project}
+          repo={badgeRepo}
+          onClose={() => setShowMilestones(false)}
+          onOpenIssue={setOpenIssueRef}
+        />
       )}
     </div>
   );

@@ -3,7 +3,6 @@ import TokenScreen from "./components/TokenScreen";
 import ProjectPicker from "./components/ProjectPicker";
 import ProjectView from "./components/ProjectView";
 import ThemeToggle from "./components/ThemeToggle";
-import NotificationsButton from "./components/NotificationsButton";
 import NotificationsInbox from "./components/NotificationsInbox";
 import {
   getGithubToken,
@@ -204,6 +203,8 @@ export default function App() {
         onItemAdded={addItem}
         onItemRemoved={removeItem}
         onFieldOptionsChanged={patchFieldOptions}
+        onOpenNotifications={() => setShowNotifications(true)}
+        notificationsRefreshKey={notificationsRefreshKey}
       />
     );
   } else {
@@ -225,9 +226,6 @@ export default function App() {
     <>
       {content}
       <ThemeToggle theme={theme} onToggle={toggleTheme} />
-      {token && (
-        <NotificationsButton token={token} onOpen={() => setShowNotifications(true)} refreshKey={notificationsRefreshKey} />
-      )}
       {showNotifications && token && (
         <NotificationsInbox
           token={token}

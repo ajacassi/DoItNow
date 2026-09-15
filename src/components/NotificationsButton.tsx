@@ -30,7 +30,7 @@ export default function NotificationsButton({ token, onOpen, refreshKey }: Props
     <button
       onClick={onOpen}
       title="Notifiche"
-      className="fixed bottom-4 right-24 z-[100] flex items-center gap-1.5 rounded-full border border-neutral-800 bg-neutral-900/90 px-3 py-2 text-xs text-neutral-300 shadow-lg backdrop-blur transition hover:border-neutral-600 hover:text-neutral-100"
+      className="flex items-center gap-1.5 rounded-lg border border-neutral-800 px-2.5 py-1.5 text-xs text-neutral-300 transition hover:border-neutral-500"
     >
       🔔
       {unreadLabel && <span className="rounded-full bg-indigo-600 px-1.5 text-[10px] font-semibold text-white">{unreadLabel}</span>}
