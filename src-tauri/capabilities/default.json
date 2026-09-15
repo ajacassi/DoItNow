@@ -10,6 +10,8 @@
     "dialog:default",
     "fs:default",
     "fs:allow-read-file",
+    "fs:allow-write-file",
+    "fs:allow-exists",
     {
       "identifier": "http:default",
       "allow": [

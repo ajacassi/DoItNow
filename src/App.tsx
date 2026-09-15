@@ -4,6 +4,7 @@ import ProjectPicker from "./components/ProjectPicker";
 import ProjectView from "./components/ProjectView";
 import ThemeToggle from "./components/ThemeToggle";
 import NotificationsInbox from "./components/NotificationsInbox";
+import SettingsPanel from "./components/SettingsPanel";
 import {
   getGithubToken,
   setGithubToken,
@@ -45,6 +46,7 @@ export default function App() {
   const [theme, setThemeState] = useState<ThemeName>("vivid");
   const [showNotifications, setShowNotifications] = useState(false);
   const [notificationsRefreshKey, setNotificationsRefreshKey] = useState(0);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     getTheme().then((t) => {
@@ -226,6 +228,14 @@ export default function App() {
     <>
       {content}
       <ThemeToggle theme={theme} onToggle={toggleTheme} />
+      <button
+        onClick={() => setShowSettings(true)}
+        title="Impostazioni"
+        className="fixed bottom-4 right-24 z-[100] rounded-full border border-neutral-800 bg-neutral-900/90 px-3 py-2 text-xs text-neutral-300 shadow-lg backdrop-blur transition hover:border-neutral-600 hover:text-neutral-100"
+      >
+        ⚙️
+      </button>
+      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
       {showNotifications && token && (
         <NotificationsInbox
           token={token}

@@ -4,6 +4,9 @@ import type { SortKey } from "./sort";
 const SETTINGS_FILE = "settings.json";
 const TOKEN_KEY = "github_token";
 const LAST_ORG_KEY = "last_org";
+const SYNC_FILE_PATH_KEY = "sync_file_path";
+/** Keys that are machine-specific or sensitive — never exported to, or imported from, the portable settings file. */
+const NON_PORTABLE_KEYS = new Set([TOKEN_KEY, SYNC_FILE_PATH_KEY]);
 
 let storePromise: Promise<Store> | null = null;
 
@@ -157,5 +160,59 @@ export async function getTheme(): Promise<ThemeName | null> {
 export async function setTheme(theme: ThemeName): Promise<void> {
   const store = await getStore();
   await store.set(THEME_KEY, theme);
+  await store.save();
+}
+
+// ---------------------------------------------------------------------------
+// Portable settings file — lets everything saved locally (views, filters,
+// columns, sort, label folders, theme...) except the token and the sync path
+// itself travel to another machine, e.g. via a file kept in a synced folder
+// (OneDrive, Dropbox...).
+// ---------------------------------------------------------------------------
+
+export async function getSyncFilePath(): Promise<string | null> {
+  const store = await getStore();
+  const path = await store.get<string>(SYNC_FILE_PATH_KEY);
+  return path ?? null;
+}
+
+export async function setSyncFilePath(path: string): Promise<void> {
+  const store = await getStore();
+  await store.set(SYNC_FILE_PATH_KEY, path);
+  await store.save();
+}
+
+export interface SettingsExport {
+  doitnowSettingsExport: 1;
+  exportedAt: string;
+  data: Record<string, unknown>;
+}
+
+export async function buildSettingsExport(): Promise<SettingsExport> {
+  const store = await getStore();
+  const entries = await store.entries<unknown>();
+  const data: Record<string, unknown> = {};
+  for (const [key, value] of entries) {
+    if (NON_PORTABLE_KEYS.has(key)) continue;
+    data[key] = value;
+  }
+  return { doitnowSettingsExport: 1, exportedAt: new Date().toISOString(), data };
+}
+
+/** Throws if `parsed` doesn't look like a settings export produced by this app. */
+export async function applySettingsImport(parsed: unknown): Promise<void> {
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    (parsed as Partial<SettingsExport>).doitnowSettingsExport !== 1 ||
+    typeof (parsed as Partial<SettingsExport>).data !== "object"
+  ) {
+    throw new Error("Il file non è un export di impostazioni DoItNow valido.");
+  }
+  const store = await getStore();
+  for (const [key, value] of Object.entries((parsed as SettingsExport).data)) {
+    if (NON_PORTABLE_KEYS.has(key)) continue;
+    await store.set(key, value);
+  }
   await store.save();
 }
