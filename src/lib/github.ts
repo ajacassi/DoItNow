@@ -1479,3 +1479,96 @@ export async function uploadImageAttachment(
   }
   return url;
 }
+
+// ---------------------------------------------------------------------------
+// Notifications — GitHub's own inbox (Assigned/Mentioned/Participating/...),
+// via the REST API. One call returns everything GitHub already computed
+// server-side, regardless of how many issues a project has — the cheap
+// alternative to scanning every issue/comment for @mentions ourselves.
+// ---------------------------------------------------------------------------
+
+export interface NotificationItem {
+  id: string;
+  unread: boolean;
+  reason: string;
+  updatedAt: string;
+  title: string;
+  contentType: string;
+  repositoryFullName: string;
+  repositoryOwner: string | null;
+  repositoryName: string | null;
+  number: number | null;
+  htmlUrl: string | null;
+}
+
+interface RawNotification {
+  id: string;
+  unread: boolean;
+  reason: string;
+  updated_at: string;
+  subject: { title: string; type: string; url: string | null };
+  repository: { full_name: string; owner: { login: string } | null; name: string; html_url: string };
+}
+
+export async function fetchNotifications(
+  token: string,
+  opts: { all?: boolean; page?: number; perPage?: number } = {},
+): Promise<{ items: NotificationItem[]; hasMore: boolean }> {
+  const params = new URLSearchParams({
+    all: opts.all ? "true" : "false",
+    per_page: String(opts.perPage ?? 50),
+    page: String(opts.page ?? 1),
+  });
+  const res = await fetch(`https://api.github.com/notifications?${params}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+    },
+  });
+  if (!res.ok) {
+    throw new GithubApiError(
+      res.status === 403 || res.status === 404
+        ? `GitHub ha rifiutato la richiesta (${res.status}) — il token potrebbe non avere lo scope "notifications".`
+        : `GitHub API ha risposto ${res.status}`,
+      res.status,
+    );
+  }
+  const json = (await res.json()) as RawNotification[];
+  const hasMore = /rel="next"/.test(res.headers.get("Link") ?? "");
+  const items: NotificationItem[] = json.map((n) => {
+    const match = n.subject.url ? /repos\/([^/]+)\/([^/]+)\/(issues|pulls)\/(\d+)/.exec(n.subject.url) : null;
+    return {
+      id: n.id,
+      unread: n.unread,
+      reason: n.reason,
+      updatedAt: n.updated_at,
+      title: n.subject.title,
+      contentType: n.subject.type,
+      repositoryFullName: n.repository.full_name,
+      repositoryOwner: n.repository.owner?.login ?? null,
+      repositoryName: n.repository.name,
+      number: match ? parseInt(match[4], 10) : null,
+      htmlUrl: match
+        ? `https://github.com/${match[1]}/${match[2]}/${match[3] === "pulls" ? "pull" : "issues"}/${match[4]}`
+        : n.repository.html_url,
+    };
+  });
+  return { items, hasMore };
+}
+
+export async function markNotificationRead(token: string, threadId: string): Promise<void> {
+  const res = await fetch(`https://api.github.com/notifications/threads/${threadId}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new GithubApiError(`GitHub API ha risposto ${res.status}`, res.status);
+}
+
+export async function markAllNotificationsRead(token: string): Promise<void> {
+  const res = await fetch("https://api.github.com/notifications", {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) throw new GithubApiError(`GitHub API ha risposto ${res.status}`, res.status);
+}

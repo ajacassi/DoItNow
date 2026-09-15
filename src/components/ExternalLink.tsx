@@ -6,6 +6,8 @@ interface Props {
   className?: string;
   title?: string;
   children: ReactNode;
+  /** Fires alongside opening the link (e.g. to mark something read) — doesn't replace the open behavior. */
+  onClick?: () => void;
 }
 
 /**
@@ -13,7 +15,7 @@ interface Props {
  * clicking it can silently do nothing. Open explicitly via Tauri's opener
  * plugin instead, which is the documented, guaranteed-to-work path.
  */
-export default function ExternalLink({ href, className, title, children }: Props) {
+export default function ExternalLink({ href, className, title, children, onClick }: Props) {
   return (
     <a
       href={href}
@@ -21,6 +23,7 @@ export default function ExternalLink({ href, className, title, children }: Props
       onClick={(e) => {
         e.preventDefault();
         openUrl(href).catch(() => {});
+        onClick?.();
       }}
       className={className}
     >

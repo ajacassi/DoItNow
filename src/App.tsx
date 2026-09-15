@@ -3,6 +3,8 @@ import TokenScreen from "./components/TokenScreen";
 import ProjectPicker from "./components/ProjectPicker";
 import ProjectView from "./components/ProjectView";
 import ThemeToggle from "./components/ThemeToggle";
+import NotificationsButton from "./components/NotificationsButton";
+import NotificationsInbox from "./components/NotificationsInbox";
 import {
   getGithubToken,
   setGithubToken,
@@ -42,6 +44,8 @@ export default function App() {
   const [boardRefreshing, setBoardRefreshing] = useState(false);
   const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
   const [theme, setThemeState] = useState<ThemeName>("vivid");
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notificationsRefreshKey, setNotificationsRefreshKey] = useState(0);
 
   useEffect(() => {
     getTheme().then((t) => {
@@ -221,6 +225,18 @@ export default function App() {
     <>
       {content}
       <ThemeToggle theme={theme} onToggle={toggleTheme} />
+      {token && (
+        <NotificationsButton token={token} onOpen={() => setShowNotifications(true)} refreshKey={notificationsRefreshKey} />
+      )}
+      {showNotifications && token && (
+        <NotificationsInbox
+          token={token}
+          onClose={() => {
+            setShowNotifications(false);
+            setNotificationsRefreshKey((k) => k + 1);
+          }}
+        />
+      )}
     </>
   );
 }
