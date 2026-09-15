@@ -1,12 +1,17 @@
 import type { ProjectDetail, ProjectItem } from "./github";
 
+export type ComparisonOperator = "=" | "<" | ">" | "<=" | ">=";
+
 type QueryNode =
   | { type: "and"; children: QueryNode[] }
   | { type: "or"; children: QueryNode[] }
   | { type: "not"; child: QueryNode }
-  | { type: "term"; field: string | null; value: string };
+  | { type: "term"; field: string | null; operator: ComparisonOperator; value: string };
 
-function unquote(token: string): string {
+// Longest-prefix-first so "<=" is matched before "<".
+const OPERATORS: ComparisonOperator[] = ["<=", ">=", "<", ">", "="];
+
+export function unquote(token: string): string {
   if (token.length >= 2 && token.startsWith('"') && token.endsWith('"')) {
     return token.slice(1, -1);
   }
@@ -46,14 +51,25 @@ function tokenize(input: string): string[] {
   return tokens;
 }
 
+/** Splits a leading `<=`/`>=`/`<`/`>`/`=` off a term's value — `=` (exact match) if none is given, preserving old query behavior. */
+export function splitOperator(rawValue: string): { operator: ComparisonOperator; value: string } {
+  for (const op of OPERATORS) {
+    if (rawValue.startsWith(op)) return { operator: op, value: rawValue.slice(op.length) };
+  }
+  return { operator: "=", value: rawValue };
+}
+
 function parseTermToken(tok: string): QueryNode {
   const idx = tok.indexOf(":");
   if (idx > 0) {
-    const field = tok.slice(0, idx).toLowerCase();
-    const value = unquote(tok.slice(idx + 1));
-    return { type: "term", field, value };
+    // A multi-word field name (e.g. "target date") must be quoted for the
+    // tokenizer to keep it as one token — strip those quotes here too, not
+    // just from the value, or a quoted field name never matches anything.
+    const field = unquote(tok.slice(0, idx)).toLowerCase();
+    const { operator, value } = splitOperator(unquote(tok.slice(idx + 1)));
+    return { type: "term", field, operator, value };
   }
-  return { type: "term", field: null, value: unquote(tok) };
+  return { type: "term", field: null, operator: "=", value: unquote(tok) };
 }
 
 /** Tolerant recursive-descent parser: `and` (implicit or explicit), `or`, `-`/`not` negation, `(...)` grouping, `"quoted values"`. */
@@ -110,7 +126,69 @@ export function parseIssueQuery(input: string): QueryNode | null {
   return parseOr();
 }
 
-function evaluateTerm(field: string | null, rawValue: string, item: ProjectItem, project: ProjectDetail): boolean {
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function isoDate(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/**
+ * Resolves a date term's value to a comparable ISO date: `today`, `today+N` /
+ * `today-N`, the bare shorthand `+N` / `-N` (both meaning "N days from
+ * today"), or a literal date string passed through as-is. `today` re-resolves
+ * every time a query runs, so a saved view using it always reflects the day
+ * it's opened, not the day it was saved.
+ */
+function resolveDateValue(raw: string): string {
+  const trimmed = raw.trim();
+  if (/^today$/i.test(trimmed)) return isoDate(new Date());
+  const relative = /^(?:today)?([+-]\d+)$/i.exec(trimmed);
+  if (relative) {
+    const d = new Date();
+    d.setDate(d.getDate() + parseInt(relative[1], 10));
+    return isoDate(d);
+  }
+  return trimmed;
+}
+
+function compareDates(actual: string, operator: ComparisonOperator, rawTarget: string): boolean {
+  const target = resolveDateValue(rawTarget);
+  if (operator === "=") return actual === target;
+  const a = new Date(actual).getTime();
+  const b = new Date(target).getTime();
+  if (Number.isNaN(a) || Number.isNaN(b)) return false;
+  switch (operator) {
+    case "<":
+      return a < b;
+    case "<=":
+      return a <= b;
+    case ">":
+      return a > b;
+    case ">=":
+      return a >= b;
+  }
+}
+
+function compareNumbers(actual: number, operator: ComparisonOperator, rawTarget: string): boolean {
+  const target = Number(rawTarget);
+  if (Number.isNaN(target)) return false;
+  switch (operator) {
+    case "=":
+      return actual === target;
+    case "<":
+      return actual < target;
+    case "<=":
+      return actual <= target;
+    case ">":
+      return actual > target;
+    case ">=":
+      return actual >= target;
+  }
+}
+
+function evaluateTerm(field: string | null, operator: ComparisonOperator, rawValue: string, item: ProjectItem, project: ProjectDetail): boolean {
   const value = rawValue.toLowerCase();
 
   if (!field) {
@@ -150,9 +228,9 @@ function evaluateTerm(field: string | null, rawValue: string, item: ProjectItem,
         case "text":
           return fv.text.toLowerCase().includes(value);
         case "number":
-          return String(fv.number) === rawValue;
+          return compareNumbers(fv.number, operator, rawValue);
         case "date":
-          return fv.date === rawValue;
+          return compareDates(fv.date, operator, rawValue);
       }
     }
   }
@@ -167,7 +245,7 @@ function evaluateNode(node: QueryNode, item: ProjectItem, project: ProjectDetail
     case "not":
       return !evaluateNode(node.child, item, project);
     case "term":
-      return evaluateTerm(node.field, node.value, item, project);
+      return evaluateTerm(node.field, node.operator, node.value, item, project);
   }
 }
 

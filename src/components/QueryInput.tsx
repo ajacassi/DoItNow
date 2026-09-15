@@ -1,7 +1,9 @@
-import { useRef, useState } from "react";
-import type { ProjectDetail } from "../lib/github";
+import { useEffect, useRef, useState } from "react";
+import { fetchRepoMetadata, mostCommonRepo, type ProjectDetail } from "../lib/github";
+import { splitOperator, unquote } from "../lib/query";
 
 interface Props {
+  token: string;
   value: string;
   onChange: (value: string) => void;
   project: ProjectDetail;
@@ -17,18 +19,17 @@ function fieldSuggestions(project: ProjectDetail): string[] {
 }
 
 /** Values suggested for a given field key, or null when the field takes free text (no suggestions to offer). */
-function valueSuggestions(field: string, project: ProjectDetail): string[] | null {
+function valueSuggestions(field: string, project: ProjectDetail, assignableLogins: string[]): string[] | null {
   switch (field) {
     case "label": {
       const set = new Set<string>();
       for (const item of project.items) for (const l of item.labels) set.add(l.name);
       return Array.from(set).sort();
     }
-    case "assignee": {
-      const set = new Set<string>();
-      for (const item of project.items) for (const a of item.assignees) set.add(a.login);
-      return Array.from(set).sort();
-    }
+    case "assignee":
+      // Every assignable person on the project's repo — not just whoever
+      // already happens to have something assigned in this project.
+      return assignableLogins;
     case "status":
       return project.statusOptions.map((o) => o.name);
     case "state":
@@ -46,6 +47,7 @@ function valueSuggestions(field: string, project: ProjectDetail): string[] | nul
     default: {
       const fieldDef = project.fields.find((f) => f.name.toLowerCase() === field);
       if (!fieldDef) return null;
+      if (fieldDef.dataType === "DATE") return ["today", "today+7", "today+30", "today-7"];
       const issueField = project.issueFieldsByName[fieldDef.name];
       const options = issueField?.options ?? fieldDef.options;
       return options ? options.map((o) => o.name) : null;
@@ -61,12 +63,34 @@ function getCurrentToken(value: string, cursor: number): { start: number; end: n
   return { start, end, text: value.slice(start, end) };
 }
 
-export default function QueryInput({ value, onChange, project, className, placeholder }: Props) {
+export default function QueryInput({ token, value, onChange, project, className, placeholder }: Props) {
   const ref = useRef<HTMLInputElement>(null);
   const [candidates, setCandidates] = useState<string[]>([]);
   const [mode, setMode] = useState<"field" | "value">("field");
   const [tokenRange, setTokenRange] = useState<{ start: number; end: number } | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+
+  const dominantRepo = mostCommonRepo(project);
+  const [assignableLogins, setAssignableLogins] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!dominantRepo) {
+      setAssignableLogins([]);
+      return;
+    }
+    let cancelled = false;
+    fetchRepoMetadata(token, dominantRepo.owner, dominantRepo.name)
+      .then((m) => {
+        if (!cancelled) setAssignableLogins(m.assignableUsers.map((u) => u.login).sort());
+      })
+      .catch(() => {
+        if (!cancelled) setAssignableLogins([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, dominantRepo?.owner, dominantRepo?.name]);
 
   function recompute(text: string, cursor: number) {
     const token = getCurrentToken(text, cursor);
@@ -84,14 +108,18 @@ export default function QueryInput({ value, onChange, project, className, placeh
       return;
     }
 
-    const field = core.slice(0, colonIdx).toLowerCase();
+    // A multi-word field name (e.g. "target date") must be quoted for it to
+    // stay one token — strip those quotes before looking the field up.
+    const field = unquote(core.slice(0, colonIdx)).toLowerCase();
     const rawValuePrefix = core.slice(colonIdx + 1).replace(/^"/, "");
-    const options = valueSuggestions(field, project);
+    const options = valueSuggestions(field, project, assignableLogins);
     if (!options) {
       setCandidates([]);
       return;
     }
-    const prefix = rawValuePrefix.toLowerCase();
+    // A leading comparison operator (e.g. "due:>tod") is part of the value,
+    // not the text being matched against suggestions like "today".
+    const prefix = splitOperator(rawValuePrefix).value.toLowerCase();
     const list = prefix ? options.filter((o) => o.toLowerCase().includes(prefix)) : options;
     setMode("value");
     setCandidates(list.slice(0, 8));
@@ -114,12 +142,19 @@ export default function QueryInput({ value, onChange, project, className, placeh
     let replacement: string;
     let cursorAfter: number;
     if (colonIdx === -1) {
-      replacement = `${negPrefix}${candidate}:`;
+      // A field name with a space (e.g. "target date") needs quoting to stay one token.
+      const quotedField = /\s/.test(candidate) ? `"${candidate}"` : candidate;
+      replacement = `${negPrefix}${quotedField}:`;
       cursorAfter = tokenRange.start + replacement.length;
     } else {
-      const field = core.slice(0, colonIdx);
+      const field = unquote(core.slice(0, colonIdx));
+      const quotedField = /\s/.test(field) ? `"${field}"` : field;
+      // Keep whatever comparison operator was already typed (e.g. "due:>" + picking
+      // "today" should produce "due:>today", not discard the ">").
+      const { operator } = splitOperator(core.slice(colonIdx + 1).replace(/^"/, ""));
+      const opPrefix = operator === "=" ? "" : operator;
       const quoted = /\s/.test(candidate) ? `"${candidate}"` : candidate;
-      replacement = `${negPrefix}${field}:${quoted} `;
+      replacement = `${negPrefix}${quotedField}:${opPrefix}${quoted} `;
       cursorAfter = tokenRange.start + replacement.length;
     }
 

@@ -126,6 +126,7 @@ export default function ProjectCleanup({ token, project, onClose, onItemRemoved 
 
       <div className="flex items-center gap-2 border-b border-neutral-800 px-8 py-3">
         <QueryInput
+          token={token}
           value={queryText}
           onChange={setQueryText}
           project={project}
@@ -139,7 +140,10 @@ export default function ProjectCleanup({ token, project, onClose, onItemRemoved 
         )}
         <div className="rounded-lg border border-neutral-800 bg-neutral-900/50 px-3 py-1.5 text-[11px] leading-relaxed text-neutral-500">
           <span className="text-neutral-300">chiave:valore</span> · spazio = and · <span className="text-neutral-300">or</span> = oppure ·{" "}
-          <span className="text-neutral-300">-</span>nega · (raggruppa) · "virgolette" per spazi
+          <span className="text-neutral-300">-</span>nega · (raggruppa) · "virgolette" per spazi (anche nel nome campo, es.{" "}
+          <span className="text-neutral-300">"target date":&gt;today</span>) ·{" "}
+          <span className="text-neutral-300">campo:&gt;valore</span> confronto su date/numeri ({">"}, {"<"}, {">="}, {"<="}) ·{" "}
+          <span className="text-neutral-300">today</span>/<span className="text-neutral-300">today+7</span> per date relative
         </div>
       </div>
 
