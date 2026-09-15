@@ -46,6 +46,7 @@ function daysBetween(a: Date, b: Date): number {
 export default function ProjectGantt({ project, reversed, onOpenItem }: Props) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [pxPerDay, setPxPerDay] = useState(24);
+  const [showDeps, setShowDeps] = useState(true);
 
   const { startField, endField } = pickDateFields(project);
   const groups = visibleStatusEntries(groupItemsByStatus(project), reversed);
@@ -109,6 +110,39 @@ export default function ProjectGantt({ project, reversed, onOpenItem }: Props) {
     cursor.setMonth(cursor.getMonth() + 1);
   }
 
+  // Bar position of every row that has one, keyed by content id — built from
+  // data already in this project's bulk fetch (item.blockedByIds), so drawing
+  // dependency arrows costs zero extra network calls.
+  const barByContentId = new Map<string, { top: number; left: number; width: number }>();
+  let cursorY = HEADER_H;
+  for (const [status, rows] of rangesByStatus) {
+    cursorY += ROW_H;
+    if (collapsed[status]) continue;
+    for (const { item, start, end } of rows) {
+      if (start && end && item.contentId) {
+        const left = daysBetween(rangeStart, start) * pxPerDay;
+        const width = Math.max(pxPerDay * 0.6, (daysBetween(start, end) + 1) * pxPerDay - 4);
+        barByContentId.set(item.contentId, { top: cursorY + ROW_H / 2, left, width });
+      }
+      cursorY += ROW_H;
+    }
+  }
+  const timelineHeight = cursorY;
+
+  const connectors: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
+  for (const [, rows] of rangesByStatus) {
+    for (const { item } of rows) {
+      if (!item.contentId || item.blockedByIds.length === 0) continue;
+      const to = barByContentId.get(item.contentId);
+      if (!to) continue;
+      for (const blockerId of item.blockedByIds) {
+        const from = barByContentId.get(blockerId);
+        if (!from) continue; // blocker not visible in this Gantt (no dates, collapsed, or not in this project)
+        connectors.push({ x1: from.left + from.width, y1: from.top, x2: to.left, y2: to.top });
+      }
+    }
+  }
+
   return (
     <div className="flex h-full min-w-0 flex-col">
       <div className="flex items-center justify-between border-b border-neutral-800 px-8 py-2">
@@ -116,6 +150,17 @@ export default function ProjectGantt({ project, reversed, onOpenItem }: Props) {
           {startField?.name ?? "—"} → {endField?.name ?? "—"}
         </p>
         <div className="flex items-center gap-2">
+          {connectors.length > 0 && (
+            <button
+              onClick={() => setShowDeps((v) => !v)}
+              title="Mostra/nascondi le frecce di dipendenza (bloccata da)"
+              className={`rounded-lg border px-2 py-1 text-xs transition ${
+                showDeps ? "border-indigo-500 text-indigo-300" : "border-neutral-800 text-neutral-500 hover:border-neutral-500"
+              }`}
+            >
+              Dipendenze
+            </button>
+          )}
           <span className="text-xs text-neutral-500">Zoom</span>
           <div className="flex rounded-lg border border-neutral-800 p-0.5 text-xs">
             <button
@@ -218,6 +263,28 @@ export default function ProjectGantt({ project, reversed, onOpenItem }: Props) {
                 </div>
               );
             })}
+
+            {showDeps && connectors.length > 0 && (
+              <svg
+                className="pointer-events-none absolute left-0 top-0"
+                width={timelineWidth}
+                height={timelineHeight}
+                style={{ overflow: "visible" }}
+              >
+                <defs>
+                  <marker id="gantt-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M0,0 L8,4 L0,8 Z" className="fill-indigo-500/70" />
+                  </marker>
+                </defs>
+                {connectors.map((c, i) => {
+                  const elbowX = c.x1 + 14;
+                  const d = `M${c.x1},${c.y1} L${elbowX},${c.y1} L${elbowX},${c.y2} L${c.x2},${c.y2}`;
+                  return (
+                    <path key={i} d={d} className="fill-none stroke-indigo-500/70" strokeWidth={1.5} markerEnd="url(#gantt-arrow)" />
+                  );
+                })}
+              </svg>
+            )}
           </div>
         </div>
       </div>

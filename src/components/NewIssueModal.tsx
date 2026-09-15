@@ -216,6 +216,7 @@ export default function NewIssueModal({
           contentId: created.id,
           parentId: null,
           subIssuesSummary: null,
+          blockedByIds: [],
           status,
           contentType: "Issue",
           number: created.number,

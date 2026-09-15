@@ -751,8 +751,26 @@ export default function IssueDetailPanel({
               issueId={detail.id}
               blockedBy={detail.blockedBy}
               blocking={detail.blocking}
-              onBlockedByChange={(next) => setDetail({ ...detail, blockedBy: next })}
-              onBlockingChange={(next) => setDetail({ ...detail, blocking: next })}
+              onBlockedByChange={(next) => {
+                setDetail({ ...detail, blockedBy: next });
+                if (projectItem) onItemChange(projectItem.id, { blockedByIds: next.map((s) => s.id) });
+              }}
+              onBlockingChange={(next) => {
+                // "Blocca" is the inverse relationship: it's the OTHER issue's
+                // blockedByIds that changes here, not this one's — patch whichever
+                // side actually differs, if that issue happens to be a row in this project.
+                const added = next.filter((s) => !detail.blocking.some((b) => b.id === s.id));
+                const removed = detail.blocking.filter((b) => !next.some((s) => s.id === b.id));
+                setDetail({ ...detail, blocking: next });
+                for (const target of added) {
+                  const targetItem = project.items.find((it) => it.contentId === target.id);
+                  if (targetItem) onItemChange(targetItem.id, { blockedByIds: [...targetItem.blockedByIds, detail.id] });
+                }
+                for (const target of removed) {
+                  const targetItem = project.items.find((it) => it.contentId === target.id);
+                  if (targetItem) onItemChange(targetItem.id, { blockedByIds: targetItem.blockedByIds.filter((id) => id !== detail.id) });
+                }
+              }}
               onOpenIssue={onOpenIssue}
             />
 

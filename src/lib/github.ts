@@ -137,6 +137,8 @@ export interface ProjectItem {
   /** Node id of the parent issue, if this item is itself a sub-issue. */
   parentId: string | null;
   subIssuesSummary: SubIssuesSummary | null;
+  /** Content ids of issues that block this one — only populated for the ones also present in this project, for drawing Gantt dependency arrows without extra calls. */
+  blockedByIds: string[];
   status: string;
   contentType: "Issue" | "PullRequest" | "DraftIssue";
   number: number | null;
@@ -242,6 +244,7 @@ const PROJECT_ITEM_FRAGMENT = `
         state
         parent { id }
         subIssuesSummary { total completed percentCompleted }
+        blockedBy(first: 10) { nodes { id } }
         repository { name owner { login } }
         assignees(first: 6) { nodes { login avatarUrl } }
         labels(first: 10) { nodes { name color } }
@@ -398,6 +401,7 @@ interface RawProjectItemNode {
     state?: string;
     parent?: { id: string } | null;
     subIssuesSummary?: SubIssuesSummary | null;
+    blockedBy?: { nodes: Array<{ id: string }> };
     repository?: { name: string; owner: { login: string } };
     assignees?: { nodes: ProjectItemUser[] };
     labels?: { nodes: ProjectItemLabel[] };
@@ -554,6 +558,7 @@ export async function fetchProjectDetail(token: string, org: string, number: num
         contentId: content.id ?? null,
         parentId: content.parent?.id ?? null,
         subIssuesSummary: content.subIssuesSummary ?? null,
+        blockedByIds: content.blockedBy?.nodes.map((b) => b.id) ?? [],
         status,
         contentType: content.__typename,
         number: content.number ?? null,
