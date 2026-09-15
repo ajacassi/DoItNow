@@ -18,6 +18,8 @@ interface Props {
   project: ProjectDetail;
   issueId: string;
   repoName: string | null;
+  parent: SubIssueSummary | null;
+  onParentChange: (next: SubIssueSummary | null) => void;
   subIssues: SubIssueSummary[];
   onSubIssuesChange: (next: SubIssueSummary[]) => void;
   onItemAdded: (item: ProjectItem) => void;
@@ -31,6 +33,8 @@ export default function SubIssuesSection({
   project,
   issueId,
   repoName,
+  parent,
+  onParentChange,
   subIssues,
   onSubIssuesChange,
   onItemAdded,
@@ -42,6 +46,37 @@ export default function SubIssuesSection({
   const [picked, setPicked] = useState<SubIssueSummary | null>(null);
   const [linking, setLinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [showSetParent, setShowSetParent] = useState(false);
+  const [pickedParent, setPickedParent] = useState<SubIssueSummary | null>(null);
+  const [settingParent, setSettingParent] = useState(false);
+  const [parentError, setParentError] = useState<string | null>(null);
+
+  async function confirmSetParent() {
+    if (!pickedParent) return;
+    setSettingParent(true);
+    setParentError(null);
+    try {
+      await addSubIssue(token, pickedParent.id, issueId);
+      onParentChange(pickedParent);
+      setShowSetParent(false);
+      setPickedParent(null);
+    } catch {
+      setParentError("Impossibile impostare il padre.");
+    } finally {
+      setSettingParent(false);
+    }
+  }
+
+  async function unlinkParent() {
+    if (!parent) return;
+    try {
+      await removeSubIssue(token, parent.id, issueId);
+      onParentChange(null);
+    } catch {
+      // leave unchanged if the call fails
+    }
+  }
 
   async function confirmAddExisting() {
     if (!picked) return;
@@ -69,7 +104,63 @@ export default function SubIssuesSection({
   }
 
   return (
-    <section>
+    <section className="space-y-4">
+      <div>
+        <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-neutral-500">Padre</h3>
+        {parent ? (
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900/50 px-3 py-1.5">
+            <button
+              onClick={() => onOpenIssue({ repositoryOwner: parent.repositoryOwner, repository: parent.repository, number: parent.number })}
+              className="min-w-0 truncate text-left text-sm hover:underline"
+            >
+              <span className={parent.state === "CLOSED" ? "text-neutral-500 line-through" : "text-neutral-100"}>{parent.title}</span>
+              <span className="ml-1.5 text-xs text-neutral-500">
+                {parent.repository}#{parent.number}
+              </span>
+            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              <ExternalLink href={parent.url} className="text-xs text-neutral-600 hover:text-neutral-400">
+                ↗
+              </ExternalLink>
+              <button onClick={unlinkParent} className="text-xs text-neutral-500 hover:text-neutral-200">
+                Scollega
+              </button>
+            </div>
+          </div>
+        ) : !showSetParent ? (
+          <button
+            onClick={() => setShowSetParent(true)}
+            className="rounded-lg border border-neutral-700 px-2.5 py-1 text-xs text-neutral-300 hover:border-neutral-500"
+          >
+            + Imposta padre
+          </button>
+        ) : (
+          <div className="rounded-lg border border-neutral-800 bg-neutral-900/50 p-3">
+            <IssuePicker token={token} org={org} project={project} value={pickedParent} onChange={setPickedParent} excludeContentIds={[issueId]} />
+            {parentError && <p className="mt-1 text-xs text-red-400">{parentError}</p>}
+            <div className="mt-2 flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowSetParent(false);
+                  setPickedParent(null);
+                  setParentError(null);
+                }}
+                className="text-xs text-neutral-500 hover:text-neutral-200"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={confirmSetParent}
+                disabled={!pickedParent || settingParent}
+                className="rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+              >
+                {settingParent ? "Collego…" : "Collega"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">
         Sub-issue ({subIssues.length})
       </h3>

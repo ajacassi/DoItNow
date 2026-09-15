@@ -37,6 +37,7 @@ import LabelChip from "./LabelChip";
 import ImageUploadButton from "./ImageUploadButton";
 import MentionTextarea from "./MentionTextarea";
 import SubIssuesSection from "./SubIssuesSection";
+import RelationshipsSection from "./RelationshipsSection";
 import ExternalLink from "./ExternalLink";
 import LabelManager from "./LabelManager";
 import FieldOptionsManager from "./FieldOptionsManager";
@@ -731,10 +732,27 @@ export default function IssueDetailPanel({
               project={project}
               issueId={detail.id}
               repoName={issueRef.repository}
+              parent={detail.parent}
+              onParentChange={(next) => {
+                setDetail({ ...detail, parent: next });
+                if (projectItem) onItemChange(projectItem.id, { parentId: next?.id ?? null });
+              }}
               subIssues={detail.subIssues}
               onSubIssuesChange={(next) => setDetail({ ...detail, subIssues: next })}
               onItemAdded={onItemAdded}
               onFieldOptionsChanged={onFieldOptionsChanged}
+              onOpenIssue={onOpenIssue}
+            />
+
+            <RelationshipsSection
+              token={token}
+              org={org}
+              project={project}
+              issueId={detail.id}
+              blockedBy={detail.blockedBy}
+              blocking={detail.blocking}
+              onBlockedByChange={(next) => setDetail({ ...detail, blockedBy: next })}
+              onBlockingChange={(next) => setDetail({ ...detail, blocking: next })}
               onOpenIssue={onOpenIssue}
             />
 

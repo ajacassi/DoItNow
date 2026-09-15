@@ -689,7 +689,10 @@ export interface IssueDetail {
   assignees: RepoUser[];
   labels: RepoLabel[];
   comments: IssueComment[];
+  parent: SubIssueSummary | null;
   subIssues: SubIssueSummary[];
+  blockedBy: SubIssueSummary[];
+  blocking: SubIssueSummary[];
   repoLabels: RepoLabel[];
   repoMilestones: RepoMilestone[];
   repoAssignableUsers: RepoUser[];
@@ -717,7 +720,35 @@ const ISSUE_DETAIL_QUERY = `
         assignees(first: 10) { nodes { id login avatarUrl } }
         labels(first: 20) { nodes { id name color description } }
         comments(first: 50) { nodes { id body createdAt author { login avatarUrl } } }
+        parent {
+          id
+          number
+          title
+          state
+          url
+          repository { name owner { login } }
+        }
         subIssues(first: 25) {
+          nodes {
+            id
+            number
+            title
+            state
+            url
+            repository { name owner { login } }
+          }
+        }
+        blockedBy(first: 25) {
+          nodes {
+            id
+            number
+            title
+            state
+            url
+            repository { name owner { login } }
+          }
+        }
+        blocking(first: 25) {
           nodes {
             id
             number
@@ -765,7 +796,10 @@ interface RawIssueDetailResponse {
       assignees: { nodes: RepoUser[] };
       labels: { nodes: RepoLabel[] };
       comments: { nodes: IssueComment[] };
+      parent: RawSubIssue | null;
       subIssues: { nodes: RawSubIssue[] };
+      blockedBy: { nodes: RawSubIssue[] };
+      blocking: { nodes: RawSubIssue[] };
       projectItems: { nodes: Array<{ id: string; project: { id: string; title: string; number: number } }> };
     } | null;
     labels: { nodes: RepoLabel[] };
@@ -796,7 +830,36 @@ export async function fetchIssueDetail(
     assignees: issue.assignees.nodes,
     labels: issue.labels.nodes,
     comments: issue.comments.nodes,
+    parent: issue.parent
+      ? {
+          id: issue.parent.id,
+          number: issue.parent.number,
+          title: issue.parent.title,
+          state: issue.parent.state,
+          url: issue.parent.url,
+          repository: issue.parent.repository.name,
+          repositoryOwner: issue.parent.repository.owner.login,
+        }
+      : null,
     subIssues: issue.subIssues.nodes.map((s) => ({
+      id: s.id,
+      number: s.number,
+      title: s.title,
+      state: s.state,
+      url: s.url,
+      repository: s.repository.name,
+      repositoryOwner: s.repository.owner.login,
+    })),
+    blockedBy: issue.blockedBy.nodes.map((s) => ({
+      id: s.id,
+      number: s.number,
+      title: s.title,
+      state: s.state,
+      url: s.url,
+      repository: s.repository.name,
+      repositoryOwner: s.repository.owner.login,
+    })),
+    blocking: issue.blocking.nodes.map((s) => ({
       id: s.id,
       number: s.number,
       title: s.title,
@@ -1394,6 +1457,31 @@ export async function removeSubIssue(token: string, issueId: string, subIssueId:
       }
     }`,
     { issueId, subIssueId },
+  );
+}
+
+/** `blockingIssueId` blocks `issueId` — the reverse direction ("this issue blocks X") is the same mutation with the two ids swapped. */
+export async function addBlockedBy(token: string, issueId: string, blockingIssueId: string): Promise<void> {
+  await graphql(
+    token,
+    `mutation($issueId: ID!, $blockingIssueId: ID!) {
+      addBlockedBy(input: { issueId: $issueId, blockingIssueId: $blockingIssueId }) {
+        clientMutationId
+      }
+    }`,
+    { issueId, blockingIssueId },
+  );
+}
+
+export async function removeBlockedBy(token: string, issueId: string, blockingIssueId: string): Promise<void> {
+  await graphql(
+    token,
+    `mutation($issueId: ID!, $blockingIssueId: ID!) {
+      removeBlockedBy(input: { issueId: $issueId, blockingIssueId: $blockingIssueId }) {
+        clientMutationId
+      }
+    }`,
+    { issueId, blockingIssueId },
   );
 }
 
