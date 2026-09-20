@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ProjectDetail, ProjectItem } from "../lib/github";
-import { groupItemsByStatus } from "../lib/github";
+import { groupItemsBy, groupColor, visibleGroupEntries } from "../lib/github";
 import { colorStyle } from "../lib/colors";
 import SubIssueProgress from "./SubIssueProgress";
 import ExternalLink from "./ExternalLink";
@@ -8,6 +8,8 @@ import LabelChip from "./LabelChip";
 
 interface Props {
   project: ProjectDetail;
+  /** Optional secondary subdivision within each status column ("none", "assignee", "label", or `field:<name>`). */
+  subGroupBy: string;
   onOpenItem: (item: ProjectItem) => void;
   onNewIssueForStatus: (statusOptionId: string) => void;
   onMoveItem: (itemId: string, statusOptionId: string, statusName: string) => void;
@@ -79,17 +81,22 @@ function ItemCard({ item, onOpenItem }: { item: ProjectItem; onOpenItem: (item: 
   return body;
 }
 
-export default function ProjectBoard({ project, onOpenItem, onNewIssueForStatus, onMoveItem }: Props) {
-  const columns = groupItemsByStatus(project);
-  const optionColor = new Map(project.statusOptions.map((o) => [o.name, o.color]));
-  const optionId = new Map(project.statusOptions.map((o) => [o.name, o.id]));
+export default function ProjectBoard({ project, subGroupBy, onOpenItem, onNewIssueForStatus, onMoveItem }: Props) {
+  // The chosen subdivision (if any) becomes the outer, column-level grouping,
+  // with status always nested inside it — "Nessuno" means status stays the
+  // sole, outer grouping (and the only mode where drag-to-change-status
+  // still applies: a column only doubles as a drop target when it IS status).
+  const outerKey = subGroupBy === "none" ? "status" : subGroupBy;
+  const columns = groupItemsBy(project.items, project, outerKey);
+  const optionId = outerKey === "status" ? new Map(project.statusOptions.map((o) => [o.name, o.id])) : new Map<string, string>();
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
 
   return (
     <div className="flex h-full gap-4 overflow-x-auto px-8 py-6">
       {Array.from(columns.entries()).map(([status, items]) => {
-        const style = colorStyle(optionColor.get(status));
+        const style = colorStyle(groupColor(project, outerKey, status));
         const targetOptionId = optionId.get(status);
+        const subgroups = outerKey !== "status" ? visibleGroupEntries(groupItemsBy(items, project, "status"), false) : null;
         const isDragOver = dragOverStatus === status;
         return (
           <div
@@ -130,9 +137,19 @@ export default function ProjectBoard({ project, onOpenItem, onNewIssueForStatus,
               </div>
             </div>
             <div className="flex-1 space-y-2 overflow-y-auto px-3 pb-3">
-              {items.map((item) => (
-                <ItemCard key={item.id} item={item} onOpenItem={onOpenItem} />
-              ))}
+              {subgroups
+                ? subgroups.map(([subName, subItems]) => (
+                    <div key={subName} className="space-y-2">
+                      <div className="flex items-center gap-1.5 pt-1">
+                        <span className="truncate text-[11px] font-medium text-neutral-500">{subName}</span>
+                        <span className="text-[11px] text-neutral-700">{subItems.length}</span>
+                      </div>
+                      {subItems.map((item) => (
+                        <ItemCard key={item.id} item={item} onOpenItem={onOpenItem} />
+                      ))}
+                    </div>
+                  ))
+                : items.map((item) => <ItemCard key={item.id} item={item} onOpenItem={onOpenItem} />)}
               {items.length === 0 && (
                 <p className="px-1 py-4 text-center text-xs text-neutral-600">Nessuna card</p>
               )}

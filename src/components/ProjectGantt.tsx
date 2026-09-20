@@ -1,13 +1,19 @@
 import { useState } from "react";
 import type { ProjectDetail, ProjectField, ProjectItem } from "../lib/github";
-import { groupItemsByStatus, visibleStatusEntries } from "../lib/github";
+import { groupItemsBy, visibleGroupEntries, groupColor } from "../lib/github";
 import { colorStyle } from "../lib/colors";
 
 interface Props {
   project: ProjectDetail;
+  /** Optional secondary subdivision within each status group ("none", "assignee", "label", or `field:<name>`). */
+  subGroupBy: string;
   reversed: boolean;
   onOpenItem: (item: ProjectItem) => void;
 }
+
+type GanttRange = { item: ProjectItem; start: Date | null; end: Date | null };
+
+type GanttRow = { kind: "subheader"; key: string; label: string; count: number } | ({ kind: "item" } & GanttRange);
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const ROW_H = 34;
@@ -43,22 +49,26 @@ function daysBetween(a: Date, b: Date): number {
   return Math.round((b.getTime() - a.getTime()) / DAY_MS);
 }
 
-export default function ProjectGantt({ project, reversed, onOpenItem }: Props) {
+export default function ProjectGantt({ project, subGroupBy, reversed, onOpenItem }: Props) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [pxPerDay, setPxPerDay] = useState(24);
   const [showDeps, setShowDeps] = useState(true);
 
+  // The chosen subdivision (if any) becomes the outer grouping, with status
+  // always nested inside it — "Nessuno" means status stays the sole, outer
+  // grouping, exactly like before this feature existed.
+  const outerKey = subGroupBy === "none" ? "status" : subGroupBy;
+
   const { startField, endField } = pickDateFields(project);
-  const groups = visibleStatusEntries(groupItemsByStatus(project), reversed);
-  const optionColor = new Map(project.statusOptions.map((o) => [o.name, o.color]));
+  const statusGroups = visibleGroupEntries(groupItemsBy(project.items, project, outerKey), reversed);
 
   // Items with no date on either field are still listed (so it's obvious which
   // ones need updating) — just without a bar, sorted after the dated ones.
-  const rangesByStatus: Array<[string, Array<{ item: ProjectItem; start: Date | null; end: Date | null }>]> = [];
+  const rangesByStatus: Array<[string, GanttRange[]]> = [];
   let minDate: Date | null = null;
   let maxDate: Date | null = null;
-  for (const [status, items] of groups) {
-    const rows: Array<{ item: ProjectItem; start: Date | null; end: Date | null }> = [];
+  for (const [status, items] of statusGroups) {
+    const rows: GanttRange[] = [];
     for (const item of items) {
       const r = itemRange(item, startField, endField);
       rows.push({ item, start: r?.start ?? null, end: r?.end ?? null });
@@ -74,8 +84,26 @@ export default function ProjectGantt({ project, reversed, onOpenItem }: Props) {
     rangesByStatus.push([status, rows]);
   }
 
-  function toggle(status: string) {
-    setCollapsed((c) => ({ ...c, [status]: !c[status] }));
+  function toggle(key: string) {
+    setCollapsed((c) => ({ ...c, [key]: !c[key] }));
+  }
+
+  // Rows to actually render for one status: either the ranged items directly
+  // (no secondary grouping), or subheader rows interleaved with them — a
+  // collapsed subheader hides its item rows here, so cursorY/layout below
+  // never has to special-case it separately.
+  function rowsForStatus(status: string, rows: GanttRange[]): GanttRow[] {
+    if (outerKey === "status") return rows.map((r) => ({ kind: "item", ...r }));
+    const byId = new Map(rows.map((r) => [r.item.id, r]));
+    const subgroups = visibleGroupEntries(groupItemsBy(rows.map((r) => r.item), project, "status"), false);
+    const out: GanttRow[] = [];
+    for (const [subName, subItems] of subgroups) {
+      const subKey = `${status}::${subName}`;
+      out.push({ kind: "subheader", key: subKey, label: subName, count: subItems.length });
+      if (collapsed[subKey]) continue;
+      for (const item of subItems) out.push({ kind: "item", ...byId.get(item.id)! });
+    }
+    return out;
   }
 
   if (!startField && !endField) {
@@ -114,15 +142,18 @@ export default function ProjectGantt({ project, reversed, onOpenItem }: Props) {
   // data already in this project's bulk fetch (item.blockedByIds), so drawing
   // dependency arrows costs zero extra network calls.
   const barByContentId = new Map<string, { top: number; left: number; width: number }>();
+  const rowsByStatus = new Map<string, GanttRow[]>();
   let cursorY = HEADER_H;
   for (const [status, rows] of rangesByStatus) {
+    const displayRows = rowsForStatus(status, rows);
+    rowsByStatus.set(status, displayRows);
     cursorY += ROW_H;
     if (collapsed[status]) continue;
-    for (const { item, start, end } of rows) {
-      if (start && end && item.contentId) {
-        const left = daysBetween(rangeStart, start) * pxPerDay;
-        const width = Math.max(pxPerDay * 0.6, (daysBetween(start, end) + 1) * pxPerDay - 4);
-        barByContentId.set(item.contentId, { top: cursorY + ROW_H / 2, left, width });
+    for (const row of displayRows) {
+      if (row.kind === "item" && row.start && row.end && row.item.contentId) {
+        const left = daysBetween(rangeStart, row.start) * pxPerDay;
+        const width = Math.max(pxPerDay * 0.6, (daysBetween(row.start, row.end) + 1) * pxPerDay - 4);
+        barByContentId.set(row.item.contentId, { top: cursorY + ROW_H / 2, left, width });
       }
       cursorY += ROW_H;
     }
@@ -184,7 +215,7 @@ export default function ProjectGantt({ project, reversed, onOpenItem }: Props) {
           <div className="sticky left-0 z-10 w-64 shrink-0 border-r border-neutral-800 bg-neutral-950">
             <div style={{ height: HEADER_H }} className="border-b border-neutral-800" />
             {rangesByStatus.map(([status, rows]) => {
-              const style = colorStyle(optionColor.get(status));
+              const style = colorStyle(groupColor(project, outerKey, status));
               const isCollapsed = collapsed[status];
               const withDates = rows.filter((r) => r.start).length;
               return (
@@ -204,19 +235,32 @@ export default function ProjectGantt({ project, reversed, onOpenItem }: Props) {
                     </span>
                   </button>
                   {!isCollapsed &&
-                    rows.map(({ item, start }) => (
-                      <button
-                        key={item.id}
-                        onClick={() => onOpenItem(item)}
-                        style={{ height: ROW_H }}
-                        title={start ? item.title : `${item.title} — nessuna data impostata`}
-                        className={`flex w-full items-center truncate border-b border-neutral-800/40 px-2 pl-7 text-left text-xs hover:text-neutral-100 hover:underline ${
-                          start ? "text-neutral-300" : "text-neutral-600"
-                        }`}
-                      >
-                        {item.title}
-                      </button>
-                    ))}
+                    rowsByStatus.get(status)!.map((row) =>
+                      row.kind === "subheader" ? (
+                        <button
+                          key={row.key}
+                          onClick={() => toggle(row.key)}
+                          style={{ height: ROW_H }}
+                          className="flex w-full items-center gap-1.5 border-b border-neutral-800/60 bg-neutral-900/30 px-2 pl-4 text-left"
+                        >
+                          <ChevronIcon open={!collapsed[row.key]} />
+                          <span className="truncate text-[11px] font-medium text-neutral-400">{row.label}</span>
+                          <span className="shrink-0 text-[11px] text-neutral-700">{row.count}</span>
+                        </button>
+                      ) : (
+                        <button
+                          key={row.item.id}
+                          onClick={() => onOpenItem(row.item)}
+                          style={{ height: ROW_H }}
+                          title={row.start ? row.item.title : `${row.item.title} — nessuna data impostata`}
+                          className={`flex w-full items-center truncate border-b border-neutral-800/40 px-2 text-left text-xs hover:text-neutral-100 hover:underline ${
+                            outerKey === "status" ? "pl-7" : "pl-9"
+                          } ${row.start ? "text-neutral-300" : "text-neutral-600"}`}
+                        >
+                          {row.item.title}
+                        </button>
+                      ),
+                    )}
                 </div>
               );
             })}
@@ -235,31 +279,38 @@ export default function ProjectGantt({ project, reversed, onOpenItem }: Props) {
               <div className="pointer-events-none absolute top-0 z-0 w-px bg-indigo-500/50" style={{ left: todayOffset * pxPerDay, height: "100%" }} />
             )}
 
-            {rangesByStatus.map(([status, rows]) => {
+            {rangesByStatus.map(([status]) => {
               const isCollapsed = collapsed[status];
               return (
                 <div key={status}>
                   <div style={{ height: ROW_H }} className="border-b border-neutral-800/60" />
                   {!isCollapsed &&
-                    rows.map(({ item, start, end }) => (
-                      <div key={item.id} style={{ height: ROW_H }} className="relative border-b border-neutral-800/40">
-                        {start && end && (() => {
-                          const style = colorStyle(optionColor.get(item.status));
-                          const left = daysBetween(rangeStart, start) * pxPerDay;
-                          const width = Math.max(pxPerDay * 0.6, (daysBetween(start, end) + 1) * pxPerDay - 4);
-                          return (
-                            <button
-                              onClick={() => onOpenItem(item)}
-                              title={`${item.title} · ${start.toLocaleDateString("it-IT")} → ${end.toLocaleDateString("it-IT")}`}
-                              style={{ left, width, top: 6, height: ROW_H - 12 }}
-                              className={`absolute overflow-hidden rounded border px-1.5 text-left text-[11px] transition hover:brightness-125 ${style.bg} ${style.border} ${style.text}`}
-                            >
-                              {item.title}
-                            </button>
-                          );
-                        })()}
-                      </div>
-                    ))}
+                    rowsByStatus.get(status)!.map((row) =>
+                      row.kind === "subheader" ? (
+                        <div key={row.key} style={{ height: ROW_H }} className="border-b border-neutral-800/60 bg-neutral-900/20" />
+                      ) : (
+                        <div key={row.item.id} style={{ height: ROW_H }} className="relative border-b border-neutral-800/40">
+                          {row.start && row.end && (() => {
+                            const item = row.item;
+                            const start = row.start!;
+                            const end = row.end!;
+                            const style = colorStyle(groupColor(project, "status", item.status));
+                            const left = daysBetween(rangeStart, start) * pxPerDay;
+                            const width = Math.max(pxPerDay * 0.6, (daysBetween(start, end) + 1) * pxPerDay - 4);
+                            return (
+                              <button
+                                onClick={() => onOpenItem(item)}
+                                title={`${item.title} · ${start.toLocaleDateString("it-IT")} → ${end.toLocaleDateString("it-IT")}`}
+                                style={{ left, width, top: 6, height: ROW_H - 12 }}
+                                className={`absolute overflow-hidden rounded border px-1.5 text-left text-[11px] transition hover:brightness-125 ${style.bg} ${style.border} ${style.text}`}
+                              >
+                                {item.title}
+                              </button>
+                            );
+                          })()}
+                        </div>
+                      ),
+                    )}
                 </div>
               );
             })}

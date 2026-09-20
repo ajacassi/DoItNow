@@ -11,6 +11,8 @@ import {
   setStatusOrderReversed,
   getSortKeys,
   setSortKeys,
+  getSubGroupBy,
+  setSubGroupBy,
   type SavedView,
 } from "../lib/store";
 import { defaultColumns, orderColumns } from "../lib/columns";
@@ -26,6 +28,7 @@ import QueryInput from "./QueryInput";
 import SavedViewsBar from "./SavedViewsBar";
 import ColumnPicker from "./ColumnPicker";
 import SortPicker from "./SortPicker";
+import GroupByPicker from "./GroupByPicker";
 import MilestonesManager from "./MilestonesManager";
 import NotificationsButton from "./NotificationsButton";
 
@@ -133,6 +136,22 @@ export default function ProjectView({
   function changeSortKeys(next: SortKey[]) {
     setSortKeysState(next);
     setSortKeys(project.id, next);
+  }
+
+  // Optional secondary subdivision within each status group, for Table/Board/
+  // Gantt — status itself is always the outer grouping. One setting shared by
+  // every view of this project, like columns/status order/sort. Multi-valued
+  // fields (assignees, labels, multi-select) put an item in every matching
+  // subgroup, by design.
+  const [subGroupBy, setSubGroupByState] = useState("none");
+
+  useEffect(() => {
+    getSubGroupBy(project.id).then(setSubGroupByState);
+  }, [project.id]);
+
+  function changeSubGroupBy(next: string) {
+    setSubGroupByState(next);
+    setSubGroupBy(project.id, next);
   }
 
   // Total issue count (all states) for the repo most of this project's items
@@ -331,6 +350,7 @@ export default function ProjectView({
           </button>
           {view === "table" && <ColumnPicker project={project} selected={visibleColumns} onToggle={toggleColumn} />}
           {view === "table" && <SortPicker project={project} sortKeys={sortKeys} onChange={changeSortKeys} />}
+          <GroupByPicker project={project} value={subGroupBy} onChange={changeSubGroupBy} />
           {(view === "table" || view === "gantt") && (
             <button
               onClick={toggleStatusOrder}
@@ -438,6 +458,7 @@ export default function ProjectView({
             <ProjectTable
               project={visibleProject}
               columns={orderColumns(project, visibleColumns)}
+              subGroupBy={subGroupBy}
               reversed={statusOrderReversed}
               sortKeys={sortKeys}
               onOpenItem={openItemDetail}
@@ -447,12 +468,13 @@ export default function ProjectView({
           ) : view === "board" ? (
             <ProjectBoard
               project={visibleProject}
+              subGroupBy={subGroupBy}
               onOpenItem={openItemDetail}
               onNewIssueForStatus={openNewIssue}
               onMoveItem={moveItemToStatus}
             />
           ) : (
-            <ProjectGantt project={visibleProject} reversed={statusOrderReversed} onOpenItem={openItemDetail} />
+            <ProjectGantt project={visibleProject} subGroupBy={subGroupBy} reversed={statusOrderReversed} onOpenItem={openItemDetail} />
           )}
         </main>
       </div>

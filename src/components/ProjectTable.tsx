@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ProjectDetail, ProjectField, ProjectItem, ItemFieldValue } from "../lib/github";
-import { groupItemsByStatus, visibleStatusEntries } from "../lib/github";
+import { groupItemsBy, visibleGroupEntries, groupColor } from "../lib/github";
 import { colorStyle } from "../lib/colors";
 import { ASSIGNEE_COLUMN, CREATED_COLUMN, UPDATED_COLUMN, CLOSED_COLUMN, availableColumns } from "../lib/columns";
 import { sortItems, type SortKey } from "../lib/sort";
@@ -11,6 +11,8 @@ import LabelChip from "./LabelChip";
 interface Props {
   project: ProjectDetail;
   columns: string[];
+  /** Optional secondary subdivision within each status group ("none", "assignee", "label", or `field:<name>`). */
+  subGroupBy: string;
   reversed: boolean;
   sortKeys: SortKey[];
   onOpenItem: (item: ProjectItem) => void;
@@ -136,12 +138,24 @@ function FieldCell({ field, value }: { field: ProjectField; value: ItemFieldValu
   );
 }
 
-export default function ProjectTable({ project, columns: visibleColumns, reversed, sortKeys, onOpenItem, onNewIssueForStatus, onMoveItem }: Props) {
-  const columns = visibleStatusEntries(groupItemsByStatus(project), reversed).map(
-    ([status, items]) => [status, sortItems(items, project, sortKeys)] as const,
+export default function ProjectTable({
+  project,
+  columns: visibleColumns,
+  subGroupBy,
+  reversed,
+  sortKeys,
+  onOpenItem,
+  onNewIssueForStatus,
+  onMoveItem,
+}: Props) {
+  // The chosen subdivision (if any) becomes the outer grouping, with status
+  // always nested inside it — "Nessuno" means status stays the sole, outer
+  // grouping, exactly like before this feature existed.
+  const outerKey = subGroupBy === "none" ? "status" : subGroupBy;
+  const outerGroups = visibleGroupEntries(groupItemsBy(project.items, project, outerKey), reversed).map(
+    ([name, items]) => [name, sortItems(items, project, sortKeys)] as const,
   );
-  const optionColor = new Map(project.statusOptions.map((o) => [o.name, o.color]));
-  const optionId = new Map(project.statusOptions.map((o) => [o.name, o.id]));
+  const optionId = outerKey === "status" ? new Map(project.statusOptions.map((o) => [o.name, o.id])) : new Map<string, string>();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
 
@@ -149,18 +163,64 @@ export default function ProjectTable({ project, columns: visibleColumns, reverse
   const columnLabel = new Map(availableColumns(project).map((o) => [o.key, o.label]));
   const gridTemplateColumns = `minmax(0,1fr) repeat(${visibleColumns.length}, 130px)`;
 
-  function toggle(status: string) {
-    setCollapsed((c) => ({ ...c, [status]: !c[status] }));
+  function toggle(key: string) {
+    setCollapsed((c) => ({ ...c, [key]: !c[key] }));
+  }
+
+  function ItemsGrid({ items }: { items: ProjectItem[] }) {
+    return (
+      <div className="overflow-hidden rounded-lg border border-neutral-800">
+        <div className="grid border-b border-neutral-800 bg-neutral-900/60 text-xs font-medium text-neutral-500" style={{ gridTemplateColumns }}>
+          <span className="px-3 py-2">Nome</span>
+          {visibleColumns.map((key) => (
+            <span key={key} className="truncate px-3 py-2">
+              {columnLabel.get(key) ?? key}
+            </span>
+          ))}
+        </div>
+        {items.map((item) => (
+          <div
+            key={item.id}
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData(DRAG_MIME, item.id);
+              e.dataTransfer.effectAllowed = "move";
+            }}
+            className="grid cursor-grab items-center border-b border-neutral-800/60 last:border-b-0 hover:bg-neutral-900/40 active:cursor-grabbing"
+            style={{ gridTemplateColumns }}
+          >
+            <NameCell item={item} onOpenItem={onOpenItem} />
+            {visibleColumns.map((key) => (
+              <div key={key} className="min-w-0 px-3 py-2">
+                {key === ASSIGNEE_COLUMN ? (
+                  <AssigneeCell item={item} />
+                ) : key === CREATED_COLUMN ? (
+                  <DateCell iso={item.createdAt} />
+                ) : key === UPDATED_COLUMN ? (
+                  <DateCell iso={item.updatedAt} />
+                ) : key === CLOSED_COLUMN ? (
+                  <DateCell iso={item.closedAt} />
+                ) : fieldByName.get(key) ? (
+                  <FieldCell field={fieldByName.get(key)!} value={item.fields[key]} />
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    );
   }
 
   return (
     <div className="h-full overflow-y-auto px-8 py-6">
       <div className="space-y-6">
-        {columns.map(([status, items]) => {
-          const style = colorStyle(optionColor.get(status));
+        {outerGroups.map(([status, items]) => {
+          const style = colorStyle(groupColor(project, outerKey, status));
           const isCollapsed = collapsed[status];
           const targetOptionId = optionId.get(status);
           const isDragOver = dragOverStatus === status;
+          const subgroups = outerKey !== "status" ? visibleGroupEntries(groupItemsBy(items, project, "status"), false) : null;
+
           return (
             <div
               key={status}
@@ -200,48 +260,31 @@ export default function ProjectTable({ project, columns: visibleColumns, reverse
               </div>
 
               {!isCollapsed && items.length > 0 && (
-                <div className="overflow-hidden rounded-lg border border-neutral-800">
-                  <div
-                    className="grid border-b border-neutral-800 bg-neutral-900/60 text-xs font-medium text-neutral-500"
-                    style={{ gridTemplateColumns }}
-                  >
-                    <span className="px-3 py-2">Nome</span>
-                    {visibleColumns.map((key) => (
-                      <span key={key} className="truncate px-3 py-2">
-                        {columnLabel.get(key) ?? key}
-                      </span>
-                    ))}
-                  </div>
-                  {items.map((item) => (
-                    <div
-                      key={item.id}
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData(DRAG_MIME, item.id);
-                        e.dataTransfer.effectAllowed = "move";
-                      }}
-                      className="grid cursor-grab items-center border-b border-neutral-800/60 last:border-b-0 hover:bg-neutral-900/40 active:cursor-grabbing"
-                      style={{ gridTemplateColumns }}
-                    >
-                      <NameCell item={item} onOpenItem={onOpenItem} />
-                      {visibleColumns.map((key) => (
-                        <div key={key} className="min-w-0 px-3 py-2">
-                          {key === ASSIGNEE_COLUMN ? (
-                            <AssigneeCell item={item} />
-                          ) : key === CREATED_COLUMN ? (
-                            <DateCell iso={item.createdAt} />
-                          ) : key === UPDATED_COLUMN ? (
-                            <DateCell iso={item.updatedAt} />
-                          ) : key === CLOSED_COLUMN ? (
-                            <DateCell iso={item.closedAt} />
-                          ) : fieldByName.get(key) ? (
-                            <FieldCell field={fieldByName.get(key)!} value={item.fields[key]} />
-                          ) : null}
+                subgroups ? (
+                  <div className="space-y-3 pl-2">
+                    {subgroups.map(([subName, subItems]) => {
+                      const subKey = `${status}::${subName}`;
+                      const subStyle = colorStyle(groupColor(project, "status", subName));
+                      const subCollapsed = collapsed[subKey];
+                      return (
+                        <div key={subKey}>
+                          <button onClick={() => toggle(subKey)} className="mb-1.5 flex items-center gap-1.5 text-left">
+                            <ChevronIcon open={!subCollapsed} />
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${subStyle.bg} ${subStyle.text} ${subStyle.border}`}
+                            >
+                              {subName}
+                            </span>
+                            <span className="text-xs text-neutral-600">{subItems.length}</span>
+                          </button>
+                          {!subCollapsed && <ItemsGrid items={subItems} />}
                         </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <ItemsGrid items={items} />
+                )
               )}
             </div>
           );

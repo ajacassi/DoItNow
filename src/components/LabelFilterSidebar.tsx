@@ -35,6 +35,8 @@ export default function LabelFilterSidebar({ projectId, items, selected, onToggl
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [addingFolder, setAddingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
+  const [dragLabel, setDragLabel] = useState<string | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
 
   useEffect(() => {
     getLabelFolders(projectId).then(setFolders);
@@ -76,6 +78,12 @@ export default function LabelFilterSidebar({ projectId, items, selected, onToggl
     setCollapsed((c) => ({ ...c, [key]: !c[key] }));
   }
 
+  function dropOnFolder(key: string) {
+    if (dragLabel) assignLabel(dragLabel, key === UNASSIGNED ? "" : key);
+    setDragLabel(null);
+    setDragOverKey(null);
+  }
+
   const labelMap = new Map<string, LabelInfo>();
   for (const item of items) {
     for (const l of item.labels) {
@@ -98,7 +106,22 @@ export default function LabelFilterSidebar({ projectId, items, selected, onToggl
 
   function LabelRow({ l }: { l: LabelInfo }) {
     return (
-      <div className="flex items-center gap-1.5 rounded-lg px-2 py-1 hover:bg-neutral-900">
+      <div
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/plain", l.name);
+          e.dataTransfer.effectAllowed = "move";
+          setDragLabel(l.name);
+        }}
+        onDragEnd={() => {
+          setDragLabel(null);
+          setDragOverKey(null);
+        }}
+        title="Trascina su una cartella per spostarla"
+        className={`flex cursor-grab items-center gap-1.5 rounded-lg px-2 py-1 hover:bg-neutral-900 ${
+          dragLabel === l.name ? "opacity-40" : ""
+        }`}
+      >
         <input
           type="checkbox"
           checked={selected.has(l.name)}
@@ -177,7 +200,22 @@ export default function LabelFilterSidebar({ projectId, items, selected, onToggl
 
           return (
             <div key={key}>
-              <div className="flex items-center gap-1 px-1 py-1">
+              <div
+                onDragOver={(e) => {
+                  if (!dragLabel) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  setDragOverKey(key);
+                }}
+                onDragLeave={() => setDragOverKey((k) => (k === key ? null : k))}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  dropOnFolder(key);
+                }}
+                className={`flex items-center gap-1 rounded-md px-1 py-1 transition ${
+                  dragOverKey === key ? "bg-indigo-950/50 ring-1 ring-inset ring-indigo-600" : ""
+                }`}
+              >
                 <button onClick={() => toggleCollapse(key)} className="flex min-w-0 flex-1 items-center gap-1.5">
                   <ChevronIcon open={!isCollapsed} />
                   <span className="truncate text-xs font-medium text-neutral-400">{title}</span>

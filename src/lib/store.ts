@@ -147,6 +147,22 @@ export async function setSortKeys(projectId: string, keys: SortKey[]): Promise<v
   await store.save();
 }
 
+// Optional secondary subdivision within each status group in Table/Board/
+// Gantt ("none", "assignee", "label", or `field:<name>`) — status itself is
+// always the outer grouping. Shared across views of a project, like columns,
+// status order and sort.
+export async function getSubGroupBy(projectId: string): Promise<string> {
+  const store = await getStore();
+  const data = await store.get<string>(`sub_group_by_${projectId}`);
+  return data ?? "none";
+}
+
+export async function setSubGroupBy(projectId: string, key: string): Promise<void> {
+  const store = await getStore();
+  await store.set(`sub_group_by_${projectId}`, key);
+  await store.save();
+}
+
 export type ThemeName = "vivid" | "dark";
 
 const THEME_KEY = "theme";

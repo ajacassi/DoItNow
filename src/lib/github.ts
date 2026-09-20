@@ -589,24 +589,100 @@ export async function fetchProjectDetail(token: string, org: string, number: num
   };
 }
 
-export function groupItemsByStatus(project: ProjectDetail): Map<string, ProjectItem[]> {
+export interface GroupByOption {
+  /** "status" | "assignee" | "label" | `field:${fieldName}` (single/multi-select project fields only). */
+  key: string;
+  label: string;
+}
+
+const NO_ASSIGNEE = "Non assegnato";
+const NO_LABEL = "Senza label";
+const NO_FIELD_VALUE = "Senza valore";
+
+/**
+ * Every dimension Table/Board/Gantt can additionally subdivide by, for the
+ * "Sottodividi per" picker — status itself isn't listed here since it's
+ * always the outer grouping; "none" (the default) means just status.
+ */
+export function subGroupByOptions(project: ProjectDetail): GroupByOption[] {
+  const options: GroupByOption[] = [
+    { key: "none", label: "Nessuno" },
+    { key: "assignee", label: "Assegnatario" },
+    { key: "label", label: "Label" },
+  ];
+  for (const f of project.fields) {
+    if (f.dataType === "SINGLE_SELECT" || f.dataType === "MULTI_SELECT") {
+      options.push({ key: `field:${f.name}`, label: f.name });
+    }
+  }
+  return options;
+}
+
+/** Known group names in a stable order (e.g. status/field option order), plus their color if any. */
+function groupShape(project: ProjectDetail, groupBy: string): { order: string[]; colorOf: (name: string) => string | undefined } {
+  if (groupBy === "status") {
+    const colors = new Map(project.statusOptions.map((o) => [o.name, o.color]));
+    return { order: project.statusOptions.map((o) => o.name), colorOf: (n) => colors.get(n) };
+  }
+  if (groupBy.startsWith("field:")) {
+    const field = project.fields.find((f) => f.name === groupBy.slice("field:".length));
+    const colors = new Map((field?.options ?? []).map((o) => [o.name, o.color]));
+    return { order: (field?.options ?? []).map((o) => o.name), colorOf: (n) => colors.get(n) };
+  }
+  return { order: [], colorOf: () => undefined };
+}
+
+/** Color (status/field-option enum name, e.g. "BLUE") of a group bucket, if the grouping has one. */
+export function groupColor(project: ProjectDetail, groupBy: string, groupName: string): string | undefined {
+  return groupShape(project, groupBy).colorOf(groupName);
+}
+
+/**
+ * Buckets `items` by the given dimension. Multi-valued fields (assignees,
+ * labels, multi-select) put an item in every matching bucket — by design,
+ * so e.g. an issue with two assignees shows up under both. Pass any item
+ * list — the whole project (for the outer, always-on status grouping) or
+ * just one status's items (for the optional secondary subdivision).
+ */
+export function groupItemsBy(items: ProjectItem[], project: ProjectDetail, groupBy: string): Map<string, ProjectItem[]> {
   const map = new Map<string, ProjectItem[]>();
-  for (const option of project.statusOptions) map.set(option.name, []);
-  for (const item of project.items) {
+  for (const name of groupShape(project, groupBy).order) map.set(name, []);
+
+  function add(key: string, item: ProjectItem) {
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(item);
+  }
+
+  for (const item of items) {
     // Sub-issues are shown nested under their parent issue, not as their own row.
     if (item.parentId) continue;
-    if (!map.has(item.status)) map.set(item.status, []);
-    map.get(item.status)!.push(item);
+    if (groupBy === "status") {
+      add(item.status, item);
+    } else if (groupBy === "assignee") {
+      if (item.assignees.length === 0) add(NO_ASSIGNEE, item);
+      else for (const a of item.assignees) add(a.login, item);
+    } else if (groupBy === "label") {
+      if (item.labels.length === 0) add(NO_LABEL, item);
+      else for (const l of item.labels) add(l.name, item);
+    } else if (groupBy.startsWith("field:")) {
+      const value = item.fields[groupBy.slice("field:".length)];
+      if (value?.type === "singleSelect") add(value.name, item);
+      else if (value?.type === "multiSelect" && value.options.length > 0) {
+        for (const o of value.options) add(o.name, item);
+      } else {
+        add(NO_FIELD_VALUE, item);
+      }
+    }
   }
   return map;
 }
 
 /**
- * Status groups in display order for Table/Gantt: empty statuses dropped,
- * and the whole list optionally reversed — no per-status reordering, just
- * whether it reads top-down or bottom-up (Board keeps every status as-is).
+ * Groups in display order: empty ones dropped, and the whole list optionally
+ * reversed — no per-group reordering, just whether it reads top-down or
+ * bottom-up (Board keeps every group as-is).
  */
-export function visibleStatusEntries(groups: Map<string, ProjectItem[]>, reversed: boolean): [string, ProjectItem[]][] {
+export function visibleGroupEntries(groups: Map<string, ProjectItem[]>, reversed: boolean): [string, ProjectItem[]][] {
   const entries = Array.from(groups.entries()).filter(([, items]) => items.length > 0);
   return reversed ? entries.reverse() : entries;
 }
