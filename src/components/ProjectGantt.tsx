@@ -218,12 +218,18 @@ export default function ProjectGantt({ project, subGroupBy, reversed, onOpenItem
               const style = colorStyle(groupColor(project, outerKey, status));
               const isCollapsed = collapsed[status];
               const withDates = rows.filter((r) => r.start).length;
+              // When subdivided, tint every row of an outer group so it's
+              // obvious at a glance where one ends and the next begins — a
+              // faint, alternating background, not a loud border (a border
+              // would add height here and desync the bars in the timeline,
+              // whose Y positions are computed from ROW_H arithmetic, not layout).
+              const bandBg = outerKey === "status" ? "" : "bg-neutral-800/50";
               return (
                 <div key={status}>
                   <button
                     onClick={() => toggle(status)}
                     style={{ height: ROW_H }}
-                    className="flex w-full items-center gap-1.5 border-b border-neutral-800/60 px-2 text-left"
+                    className={`flex w-full items-center gap-1.5 border-b border-neutral-800/60 px-2 text-left ${bandBg}`}
                   >
                     <ChevronIcon open={!isCollapsed} />
                     <span className={`inline-flex items-center gap-1.5 truncate rounded-full border px-2 py-0.5 text-[11px] font-semibold ${style.bg} ${style.text} ${style.border}`}>
@@ -241,7 +247,7 @@ export default function ProjectGantt({ project, subGroupBy, reversed, onOpenItem
                           key={row.key}
                           onClick={() => toggle(row.key)}
                           style={{ height: ROW_H }}
-                          className="flex w-full items-center gap-1.5 border-b border-neutral-800/60 bg-neutral-900/30 px-2 pl-4 text-left"
+                          className={`flex w-full items-center gap-1.5 border-b border-neutral-800/60 bg-neutral-900/30 px-2 pl-4 text-left ${bandBg}`}
                         >
                           <ChevronIcon open={!collapsed[row.key]} />
                           <span className="truncate text-[11px] font-medium text-neutral-400">{row.label}</span>
@@ -255,7 +261,7 @@ export default function ProjectGantt({ project, subGroupBy, reversed, onOpenItem
                           title={row.start ? row.item.title : `${row.item.title} — nessuna data impostata`}
                           className={`flex w-full items-center truncate border-b border-neutral-800/40 px-2 text-left text-xs hover:text-neutral-100 hover:underline ${
                             outerKey === "status" ? "pl-7" : "pl-9"
-                          } ${row.start ? "text-neutral-300" : "text-neutral-600"}`}
+                          } ${row.start ? "text-neutral-300" : "text-neutral-600"} ${bandBg}`}
                         >
                           {row.item.title}
                         </button>
@@ -281,15 +287,16 @@ export default function ProjectGantt({ project, subGroupBy, reversed, onOpenItem
 
             {rangesByStatus.map(([status]) => {
               const isCollapsed = collapsed[status];
+              const bandBg = outerKey === "status" ? "" : "bg-neutral-800/50";
               return (
                 <div key={status}>
-                  <div style={{ height: ROW_H }} className="border-b border-neutral-800/60" />
+                  <div style={{ height: ROW_H }} className={`border-b border-neutral-800/60 ${bandBg}`} />
                   {!isCollapsed &&
                     rowsByStatus.get(status)!.map((row) =>
                       row.kind === "subheader" ? (
                         <div key={row.key} style={{ height: ROW_H }} className="border-b border-neutral-800/60 bg-neutral-900/20" />
                       ) : (
-                        <div key={row.item.id} style={{ height: ROW_H }} className="relative border-b border-neutral-800/40">
+                        <div key={row.item.id} style={{ height: ROW_H }} className={`relative border-b border-neutral-800/40 ${bandBg}`}>
                           {row.start && row.end && (() => {
                             const item = row.item;
                             const start = row.start!;

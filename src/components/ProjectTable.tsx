@@ -220,6 +220,11 @@ export default function ProjectTable({
           const targetOptionId = optionId.get(status);
           const isDragOver = dragOverStatus === status;
           const subgroups = outerKey !== "status" ? visibleGroupEntries(groupItemsBy(items, project, "status"), false) : null;
+          // When subdivided, box each outer group so it's obvious at a glance
+          // where one ends and the next begins — a faint, alternating tint,
+          // not a loud border.
+          const grouped = outerKey !== "status";
+          const groupBox = grouped ? "border border-neutral-700/80 bg-neutral-800/40 px-3 py-2.5" : "";
 
           return (
             <div
@@ -237,7 +242,7 @@ export default function ProjectTable({
                 const itemId = e.dataTransfer.getData(DRAG_MIME);
                 if (itemId && targetOptionId) onMoveItem(itemId, targetOptionId, status);
               }}
-              className={`rounded-lg transition ${isDragOver ? "ring-2 ring-indigo-500" : ""}`}
+              className={`rounded-lg transition ${isDragOver ? "ring-2 ring-indigo-500" : ""} ${groupBox}`}
             >
               <div className="flex items-center gap-2 py-2">
                 <button onClick={() => toggle(status)} className="flex items-center gap-2 text-left">
