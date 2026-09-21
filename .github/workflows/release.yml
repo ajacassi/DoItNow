@@ -6,8 +6,8 @@ name: Release
 #     (e.g. 1.4.2 -> 2.0.0) — the workflow notices, creates the "v2.0.0" tag
 #     itself, and builds in the same run. Minor/patch bumps on master do NOT
 #     auto-tag, so day-to-day pushes don't spam releases.
-# Either way it ends with a draft GitHub Release with the Windows installer
-# attached — review it and hit "Publish" when ready to distribute.
+# Either way it ends with a published GitHub Release with the Windows
+# installer attached — no manual "Publish" step needed.
 on:
   push:
     tags:
@@ -108,5 +108,5 @@ jobs:
         with:
           tagName: ${{ needs.determine-tag.outputs.tag }}
           releaseName: "DoItNow ${{ needs.determine-tag.outputs.tag }}"
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
