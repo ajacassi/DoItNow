@@ -201,6 +201,8 @@ function evaluateTerm(field: string | null, operator: ComparisonOperator, rawVal
     case "assignee":
       if (value === "" || value === "none") return item.assignees.length === 0;
       return item.assignees.some((a) => a.login.toLowerCase() === value);
+    case "author":
+      return (item.author?.login ?? "").toLowerCase() === value;
     case "status":
       return item.status.toLowerCase() === value;
     case "state":

@@ -110,3 +110,4 @@ jobs:
           releaseName: "DoItNow ${{ needs.determine-tag.outputs.tag }}"
           releaseDraft: false
           prerelease: false
+          generateReleaseNotes: true

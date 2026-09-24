@@ -150,6 +150,8 @@ export interface ProjectItem {
   createdAt: string | null;
   updatedAt: string | null;
   closedAt: string | null;
+  /** Who opened the issue/PR — null for draft issues (no author) or if the account was deleted. */
+  author: ProjectItemUser | null;
   assignees: ProjectItemUser[];
   labels: ProjectItemLabel[];
   fields: Record<string, ItemFieldValue>;
@@ -242,6 +244,7 @@ const PROJECT_ITEM_FRAGMENT = `
         title
         url
         state
+        author { login avatarUrl }
         parent { id }
         subIssuesSummary { total completed percentCompleted }
         blockedBy(first: 10) { nodes { id } }
@@ -258,6 +261,7 @@ const PROJECT_ITEM_FRAGMENT = `
         title
         url
         state
+        author { login avatarUrl }
         repository { name owner { login } }
         assignees(first: 6) { nodes { login avatarUrl } }
         labels(first: 10) { nodes { name color } }
@@ -399,6 +403,7 @@ interface RawProjectItemNode {
     title: string;
     url?: string;
     state?: string;
+    author?: ProjectItemUser | null;
     parent?: { id: string } | null;
     subIssuesSummary?: SubIssuesSummary | null;
     blockedBy?: { nodes: Array<{ id: string }> };
@@ -570,6 +575,7 @@ export async function fetchProjectDetail(token: string, org: string, number: num
         createdAt: content.createdAt ?? null,
         updatedAt: content.updatedAt ?? null,
         closedAt: content.closedAt ?? null,
+        author: content.author ?? null,
         assignees: content.assignees?.nodes ?? [],
         labels: content.labels?.nodes ?? [],
         fields: fieldMap,
@@ -596,6 +602,7 @@ export interface GroupByOption {
 }
 
 const NO_ASSIGNEE = "Non assegnato";
+const NO_AUTHOR = "Autore sconosciuto";
 const NO_LABEL = "Senza label";
 const NO_FIELD_VALUE = "Senza valore";
 
@@ -608,6 +615,7 @@ export function subGroupByOptions(project: ProjectDetail): GroupByOption[] {
   const options: GroupByOption[] = [
     { key: "none", label: "Nessuno" },
     { key: "assignee", label: "Assegnatario" },
+    { key: "author", label: "Autore" },
     { key: "label", label: "Label" },
   ];
   for (const f of project.fields) {
@@ -661,6 +669,8 @@ export function groupItemsBy(items: ProjectItem[], project: ProjectDetail, group
     } else if (groupBy === "assignee") {
       if (item.assignees.length === 0) add(NO_ASSIGNEE, item);
       else for (const a of item.assignees) add(a.login, item);
+    } else if (groupBy === "author") {
+      add(item.author?.login ?? NO_AUTHOR, item);
     } else if (groupBy === "label") {
       if (item.labels.length === 0) add(NO_LABEL, item);
       else for (const l of item.labels) add(l.name, item);

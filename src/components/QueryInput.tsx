@@ -11,7 +11,7 @@ interface Props {
   placeholder?: string;
 }
 
-const FIELD_KEYS = ["label", "assignee", "status", "state", "is", "repo", "title", "number"];
+const FIELD_KEYS = ["label", "assignee", "author", "status", "state", "is", "repo", "title", "number"];
 
 function fieldSuggestions(project: ProjectDetail): string[] {
   const custom = project.fields.map((f) => f.name.toLowerCase());
@@ -27,8 +27,9 @@ function valueSuggestions(field: string, project: ProjectDetail, assignableLogin
       return Array.from(set).sort();
     }
     case "assignee":
+    case "author":
       // Every assignable person on the project's repo — not just whoever
-      // already happens to have something assigned in this project.
+      // already happens to have something assigned/opened an issue in this project.
       return assignableLogins;
     case "status":
       return project.statusOptions.map((o) => o.name);

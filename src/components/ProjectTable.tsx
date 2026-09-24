@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ProjectDetail, ProjectField, ProjectItem, ItemFieldValue } from "../lib/github";
 import { groupItemsBy, visibleGroupEntries, groupColor } from "../lib/github";
 import { colorStyle } from "../lib/colors";
-import { ASSIGNEE_COLUMN, CREATED_COLUMN, UPDATED_COLUMN, CLOSED_COLUMN, availableColumns } from "../lib/columns";
+import { ASSIGNEE_COLUMN, AUTHOR_COLUMN, CREATED_COLUMN, UPDATED_COLUMN, CLOSED_COLUMN, availableColumns } from "../lib/columns";
 import { sortItems, type SortKey } from "../lib/sort";
 import SubIssueProgress from "./SubIssueProgress";
 import ExternalLink from "./ExternalLink";
@@ -87,6 +87,16 @@ function AssigneeCell({ item }: { item: ProjectItem }) {
       {item.assignees.map((a) => (
         <img key={a.login} src={a.avatarUrl} title={a.login} alt={a.login} className="h-5 w-5 rounded-full border border-neutral-900" />
       ))}
+    </div>
+  );
+}
+
+function AuthorCell({ item }: { item: ProjectItem }) {
+  if (!item.author) return <span className="text-neutral-700">—</span>;
+  return (
+    <div className="flex items-center gap-1.5">
+      <img src={item.author.avatarUrl} alt={item.author.login} className="h-5 w-5 rounded-full border border-neutral-900" />
+      <span className="truncate text-xs text-neutral-300">{item.author.login}</span>
     </div>
   );
 }
@@ -194,6 +204,8 @@ export default function ProjectTable({
               <div key={key} className="min-w-0 px-3 py-2">
                 {key === ASSIGNEE_COLUMN ? (
                   <AssigneeCell item={item} />
+                ) : key === AUTHOR_COLUMN ? (
+                  <AuthorCell item={item} />
                 ) : key === CREATED_COLUMN ? (
                   <DateCell iso={item.createdAt} />
                 ) : key === UPDATED_COLUMN ? (

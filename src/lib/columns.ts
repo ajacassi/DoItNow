@@ -1,12 +1,14 @@
 import type { ProjectDetail } from "./github";
 
 export const ASSIGNEE_COLUMN = "assignee";
+export const AUTHOR_COLUMN = "author";
 export const CREATED_COLUMN = "created";
 export const UPDATED_COLUMN = "updated";
 export const CLOSED_COLUMN = "closed";
 
 const BUILT_IN_COLUMNS = [
   { key: ASSIGNEE_COLUMN, label: "Assegnatario" },
+  { key: AUTHOR_COLUMN, label: "Autore" },
   { key: CREATED_COLUMN, label: "Creato il" },
   { key: UPDATED_COLUMN, label: "Aggiornato il" },
   { key: CLOSED_COLUMN, label: "Chiuso il" },

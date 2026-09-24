@@ -228,6 +228,7 @@ export default function NewIssueModal({
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           closedAt: null,
+          author: null,
           assignees: (metadata?.assignableUsers ?? [])
             .filter((u) => assigneeIds.includes(u.id))
             .map((u) => ({ login: u.login, avatarUrl: u.avatarUrl })),
