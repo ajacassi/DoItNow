@@ -162,7 +162,10 @@ export default function ProjectTable({
   // always nested inside it — "Nessuno" means status stays the sole, outer
   // grouping, exactly like before this feature existed.
   const outerKey = subGroupBy === "none" ? "status" : subGroupBy;
-  const outerGroups = visibleGroupEntries(groupItemsBy(project.items, project, outerKey), reversed).map(
+  // "Inverti" always reverses the STATUS order, wherever status ends up —
+  // outer (no subdivision) or nested inside each subgroup — never the
+  // subdivision's own order.
+  const outerGroups = visibleGroupEntries(groupItemsBy(project.items, project, outerKey), outerKey === "status" && reversed).map(
     ([name, items]) => [name, sortItems(items, project, sortKeys)] as const,
   );
   const optionId = outerKey === "status" ? new Map(project.statusOptions.map((o) => [o.name, o.id])) : new Map<string, string>();
@@ -231,7 +234,7 @@ export default function ProjectTable({
           const isCollapsed = collapsed[status];
           const targetOptionId = optionId.get(status);
           const isDragOver = dragOverStatus === status;
-          const subgroups = outerKey !== "status" ? visibleGroupEntries(groupItemsBy(items, project, "status"), false) : null;
+          const subgroups = outerKey !== "status" ? visibleGroupEntries(groupItemsBy(items, project, "status"), reversed) : null;
           // When subdivided, box each outer group so it's obvious at a glance
           // where one ends and the next begins — a faint, alternating tint,
           // not a loud border.

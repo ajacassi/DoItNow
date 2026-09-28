@@ -59,8 +59,11 @@ export default function ProjectGantt({ project, subGroupBy, reversed, onOpenItem
   // grouping, exactly like before this feature existed.
   const outerKey = subGroupBy === "none" ? "status" : subGroupBy;
 
+  // "Inverti" always reverses the STATUS order, wherever status ends up —
+  // outer (no subdivision) or nested inside each subgroup — never the
+  // subdivision's own order.
   const { startField, endField } = pickDateFields(project);
-  const statusGroups = visibleGroupEntries(groupItemsBy(project.items, project, outerKey), reversed);
+  const statusGroups = visibleGroupEntries(groupItemsBy(project.items, project, outerKey), outerKey === "status" && reversed);
 
   // Items with no date on either field are still listed (so it's obvious which
   // ones need updating) — just without a bar, sorted after the dated ones.
@@ -95,7 +98,7 @@ export default function ProjectGantt({ project, subGroupBy, reversed, onOpenItem
   function rowsForStatus(status: string, rows: GanttRange[]): GanttRow[] {
     if (outerKey === "status") return rows.map((r) => ({ kind: "item", ...r }));
     const byId = new Map(rows.map((r) => [r.item.id, r]));
-    const subgroups = visibleGroupEntries(groupItemsBy(rows.map((r) => r.item), project, "status"), false);
+    const subgroups = visibleGroupEntries(groupItemsBy(rows.map((r) => r.item), project, "status"), reversed);
     const out: GanttRow[] = [];
     for (const [subName, subItems] of subgroups) {
       const subKey = `${status}::${subName}`;
