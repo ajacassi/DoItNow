@@ -48,6 +48,7 @@ export default function MentionTextarea({
   const [activeIndex, setActiveIndex] = useState(0);
   const [pasting, setPasting] = useState(false);
   const [pasteError, setPasteError] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
 
   const userCandidates =
     trigger === "@" && query !== null
@@ -130,14 +131,8 @@ export default function MentionTextarea({
     }
   }
 
-  async function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
-    if (!token || !repositoryDatabaseId) return; // no upload target — fall through to normal paste
-    const imageItem = Array.from(e.clipboardData.items).find((it) => it.type.startsWith("image/"));
-    if (!imageItem) return;
-    const file = imageItem.getAsFile();
-    if (!file) return;
-
-    e.preventDefault();
+  async function uploadFileAndInsert(file: File) {
+    if (!token || !repositoryDatabaseId) return;
     setPasting(true);
     setPasteError(null);
     try {
@@ -163,6 +158,33 @@ export default function MentionTextarea({
     }
   }
 
+  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    if (!token || !repositoryDatabaseId) return; // no upload target — fall through to normal paste
+    const imageItem = Array.from(e.clipboardData.items).find((it) => it.type.startsWith("image/"));
+    if (!imageItem) return;
+    const file = imageItem.getAsFile();
+    if (!file) return;
+    e.preventDefault();
+    uploadFileAndInsert(file);
+  }
+
+  function handleDragOver(e: React.DragEvent<HTMLTextAreaElement>) {
+    if (!token || !repositoryDatabaseId) return;
+    if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    setDragActive(true);
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLTextAreaElement>) {
+    setDragActive(false);
+    if (!token || !repositoryDatabaseId) return;
+    const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith("image/"));
+    if (!file) return;
+    e.preventDefault();
+    uploadFileAndInsert(file);
+  }
+
   return (
     <div>
       <textarea
@@ -171,13 +193,17 @@ export default function MentionTextarea({
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
+        onDragOver={handleDragOver}
+        onDragLeave={() => setDragActive(false)}
+        onDrop={handleDrop}
         onBlur={onBlur}
         rows={rows}
         placeholder={placeholder}
         autoFocus={autoFocus}
-        className={className}
+        className={`${className} ${dragActive ? "outline outline-2 outline-indigo-500" : ""}`}
       />
-      {pasting && <p className="mt-1 text-xs text-neutral-500">Carico immagine incollata…</p>}
+      {dragActive && <p className="mt-1 text-xs text-indigo-400">Rilascia per caricare l'immagine…</p>}
+      {pasting && <p className="mt-1 text-xs text-neutral-500">Carico immagine…</p>}
       {pasteError && <p className="mt-1 text-xs text-red-400">{pasteError}</p>}
       {/* Deliberately in normal flow (not position:absolute): an absolutely
           positioned dropdown gets clipped by the scrollable panels this
