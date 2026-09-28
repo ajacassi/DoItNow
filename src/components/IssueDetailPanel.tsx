@@ -460,6 +460,8 @@ export default function IssueDetailPanel({
                     rows={10}
                     placeholder="Nessuna descrizione"
                     className="w-full rounded-lg border border-indigo-500 bg-neutral-900 px-3 py-2 text-sm outline-none"
+                    token={token}
+                    repositoryDatabaseId={detail.repositoryDatabaseId}
                   />
                   <div className="mt-1.5">
                     <ImageUploadButton
@@ -780,6 +782,8 @@ export default function IssueDetailPanel({
                 rows={3}
                 placeholder="Scrivi un commento… (usa @ per menzionare, # per citare un'issue)"
                 className="mt-3 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                token={token}
+                repositoryDatabaseId={detail.repositoryDatabaseId}
               />
               <div className="mt-2 flex items-center gap-3">
                 <button

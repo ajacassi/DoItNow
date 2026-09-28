@@ -301,6 +301,8 @@ export default function NewIssueModal({
             rows={5}
             placeholder="Descrizione (opzionale)"
             className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+            token={token}
+            repositoryDatabaseId={repos.find((r) => r.id === repoId)?.databaseId ?? null}
           />
           <div className="mt-1.5">
             <ImageUploadButton

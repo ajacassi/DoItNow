@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import type { RepoUser } from "../lib/github";
+import { uploadImageAttachment, GithubApiError, type RepoUser } from "../lib/github";
 
 export interface IssueRefCandidate {
   number: number;
@@ -16,16 +16,38 @@ interface Props {
   placeholder?: string;
   className: string;
   autoFocus?: boolean;
+  /** Both required to enable "paste an image" — pasting an image with either missing is left as plain text paste. */
+  token?: string;
+  repositoryDatabaseId?: number | null;
 }
 
 type Trigger = "@" | "#";
 
-export default function MentionTextarea({ value, onChange, onBlur, users, issues = [], rows, placeholder, className, autoFocus }: Props) {
+function guessExtension(mime: string): string {
+  const ext = mime.split("/")[1];
+  return ext && /^[a-z0-9]+$/i.test(ext) ? ext : "png";
+}
+
+export default function MentionTextarea({
+  value,
+  onChange,
+  onBlur,
+  users,
+  issues = [],
+  rows,
+  placeholder,
+  className,
+  autoFocus,
+  token,
+  repositoryDatabaseId,
+}: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [trigger, setTrigger] = useState<Trigger | null>(null);
   const [query, setQuery] = useState<string | null>(null);
   const [mentionStart, setMentionStart] = useState<number | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [pasting, setPasting] = useState(false);
+  const [pasteError, setPasteError] = useState<string | null>(null);
 
   const userCandidates =
     trigger === "@" && query !== null
@@ -108,6 +130,39 @@ export default function MentionTextarea({ value, onChange, onBlur, users, issues
     }
   }
 
+  async function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    if (!token || !repositoryDatabaseId) return; // no upload target — fall through to normal paste
+    const imageItem = Array.from(e.clipboardData.items).find((it) => it.type.startsWith("image/"));
+    if (!imageItem) return;
+    const file = imageItem.getAsFile();
+    if (!file) return;
+
+    e.preventDefault();
+    setPasting(true);
+    setPasteError(null);
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const mime = file.type || "image/png";
+      const fileName = file.name && file.name !== "image.png" ? file.name : `image-${Date.now()}.${guessExtension(mime)}`;
+      const url = await uploadImageAttachment(token, repositoryDatabaseId, fileName, mime, bytes);
+      const markdown = `![${fileName}](${url})`;
+
+      const el = ref.current;
+      const cursor = el?.selectionStart ?? value.length;
+      const newValue = `${value.slice(0, cursor)}${markdown}${value.slice(cursor)}`;
+      onChange(newValue);
+      const newCursor = cursor + markdown.length;
+      requestAnimationFrame(() => {
+        el?.focus();
+        el?.setSelectionRange(newCursor, newCursor);
+      });
+    } catch (err) {
+      setPasteError(err instanceof GithubApiError ? err.message : "Caricamento immagine non riuscito.");
+    } finally {
+      setPasting(false);
+    }
+  }
+
   return (
     <div>
       <textarea
@@ -115,12 +170,15 @@ export default function MentionTextarea({ value, onChange, onBlur, users, issues
         value={value}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
         onBlur={onBlur}
         rows={rows}
         placeholder={placeholder}
         autoFocus={autoFocus}
         className={className}
       />
+      {pasting && <p className="mt-1 text-xs text-neutral-500">Carico immagine incollata…</p>}
+      {pasteError && <p className="mt-1 text-xs text-red-400">{pasteError}</p>}
       {/* Deliberately in normal flow (not position:absolute): an absolutely
           positioned dropdown gets clipped by the scrollable panels this
           component is used inside, making it invisible rather than just misplaced. */}
