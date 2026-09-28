@@ -17,6 +17,8 @@ interface LabelInfo {
 }
 
 const UNASSIGNED = "__unassigned__";
+/** Sentinel selectable alongside real label names to filter for issues with no label at all. */
+export const NO_LABEL_KEY = "__no_label__";
 
 function ChevronIcon({ open }: { open: boolean }) {
   return (
@@ -84,8 +86,17 @@ export default function LabelFilterSidebar({ projectId, items, selected, onToggl
     setDragOverKey(null);
   }
 
+  // Sub-issues (item.parentId set) are never shown as their own row — often
+  // from a different repo entirely, with its own unrelated label set — so
+  // their labels shouldn't be offered here either (selecting one could never
+  // change what's visible anyway, since those items are always excluded from
+  // Table/Board/Gantt's grouping).
+  const topLevelItems = items.filter((i) => !i.parentId);
+
   const labelMap = new Map<string, LabelInfo>();
-  for (const item of items) {
+  let noLabelCount = 0;
+  for (const item of topLevelItems) {
+    if (item.labels.length === 0) noLabelCount++;
     for (const l of item.labels) {
       const existing = labelMap.get(l.name);
       if (existing) existing.count += 1;
@@ -189,6 +200,20 @@ export default function LabelFilterSidebar({ projectId, items, selected, onToggl
       )}
 
       <div className="flex-1 space-y-1 overflow-y-auto px-2">
+        <div className="flex items-center gap-1.5 rounded-lg px-2 py-1 hover:bg-neutral-900">
+          <input
+            type="checkbox"
+            checked={selected.has(NO_LABEL_KEY)}
+            onChange={() => onToggle(NO_LABEL_KEY)}
+            className="accent-indigo-600"
+          />
+          <span className="h-2 w-2 shrink-0 rounded-full border border-dashed border-neutral-600" />
+          <label className="min-w-0 flex-1 truncate text-sm italic text-neutral-400" onClick={() => onToggle(NO_LABEL_KEY)}>
+            Senza label
+          </label>
+          <span className="shrink-0 text-xs text-neutral-600">{noLabelCount}</span>
+        </div>
+
         {allLabels.length === 0 && <p className="px-2 text-xs text-neutral-600">Nessuna label nel progetto.</p>}
 
         {orderedKeys.map((key) => {

@@ -23,7 +23,7 @@ import ProjectGantt from "./ProjectGantt";
 import IssueDetailPanel from "./IssueDetailPanel";
 import NewIssueModal from "./NewIssueModal";
 import ProjectCleanup from "./ProjectCleanup";
-import LabelFilterSidebar from "./LabelFilterSidebar";
+import LabelFilterSidebar, { NO_LABEL_KEY } from "./LabelFilterSidebar";
 import QueryInput from "./QueryInput";
 import SavedViewsBar from "./SavedViewsBar";
 import ColumnPicker from "./ColumnPicker";
@@ -286,7 +286,9 @@ export default function ProjectView({
   const visibleProject: ProjectDetail = useMemo(() => {
     let items = project.items;
     if (selectedLabels.size > 0) {
-      items = items.filter((item) => item.labels.some((l) => selectedLabels.has(l.name)));
+      items = items.filter(
+        (item) => item.labels.some((l) => selectedLabels.has(l.name)) || (selectedLabels.has(NO_LABEL_KEY) && item.labels.length === 0),
+      );
     }
     if (queryText.trim()) {
       items = items.filter((item) => matchesIssueQuery(parsedQuery, item, project));
