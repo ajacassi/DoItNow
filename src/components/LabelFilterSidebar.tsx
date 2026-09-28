@@ -5,6 +5,8 @@ import { getLabelFolders, setLabelFolders, type LabelFolders } from "../lib/stor
 interface Props {
   projectId: string;
   items: ProjectItem[];
+  /** Repos actually linked to the project — used to filter out labels from issues pulled in from elsewhere (e.g. via "relates to", not yet detectable on its own). */
+  linkedRepos: { owner: string; name: string }[];
   selected: Set<string>;
   onToggle: (labelName: string) => void;
   onClear: () => void;
@@ -32,7 +34,7 @@ function ChevronIcon({ open }: { open: boolean }) {
   );
 }
 
-export default function LabelFilterSidebar({ projectId, items, selected, onToggle, onClear }: Props) {
+export default function LabelFilterSidebar({ projectId, items, linkedRepos, selected, onToggle, onClear }: Props) {
   const [folders, setFolders] = useState<LabelFolders>({ folders: [], assignment: {} });
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [addingFolder, setAddingFolder] = useState(false);
@@ -86,12 +88,20 @@ export default function LabelFilterSidebar({ projectId, items, selected, onToggl
     setDragOverKey(null);
   }
 
-  // Sub-issues (item.parentId set) are never shown as their own row — often
-  // from a different repo entirely, with its own unrelated label set — so
-  // their labels shouldn't be offered here either (selecting one could never
-  // change what's visible anyway, since those items are always excluded from
-  // Table/Board/Gantt's grouping).
-  const topLevelItems = items.filter((i) => !i.parentId);
+  // Two kinds of items shouldn't contribute labels here:
+  //  - Sub-issues (item.parentId set) — never shown as their own row, so a
+  //    label that only lives on one could never change what's visible anyway.
+  //  - Issues pulled in from a repo NOT actually linked to the project — e.g.
+  //    via GitHub's "relates to" relationship, which (unlike sub-issues or
+  //    "blocked by") isn't exposed on the GraphQL/REST API yet, so it can't be
+  //    detected directly; filtering by repo catches it (and anything similar)
+  //    regardless of the underlying relationship.
+  const linkedRepoKeys = new Set(linkedRepos.map((r) => `${r.owner}/${r.name}`));
+  const topLevelItems = items.filter((i) => {
+    if (i.parentId) return false;
+    if (linkedRepoKeys.size === 0) return true; // no known linked repos — don't filter blind
+    return i.repositoryOwner && i.repository && linkedRepoKeys.has(`${i.repositoryOwner}/${i.repository}`);
+  });
 
   const labelMap = new Map<string, LabelInfo>();
   let noLabelCount = 0;

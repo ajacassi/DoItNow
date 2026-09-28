@@ -646,6 +646,21 @@ export function groupColor(project: ProjectDetail, groupBy: string, groupName: s
 }
 
 /**
+ * Whether an item's repo is among the project's actually-linked repos —
+ * false for issues pulled in from elsewhere (e.g. via GitHub's "relates to"
+ * relationship, which — unlike sub-issues or "blocked by" — isn't exposed on
+ * the GraphQL/REST API yet, so it can't be detected directly; repo
+ * membership catches it, and anything similar, regardless of the underlying
+ * relationship). Repos are trusted as-is when the project has no known
+ * linked repos at all, so this never filters blind.
+ */
+export function isInLinkedRepo(item: ProjectItem, project: ProjectDetail): boolean {
+  if (project.linkedRepos.length === 0) return true;
+  if (!item.repositoryOwner || !item.repository) return false;
+  return project.linkedRepos.some((r) => r.owner === item.repositoryOwner && r.name === item.repository);
+}
+
+/**
  * Buckets `items` by the given dimension. Multi-valued fields (assignees,
  * labels, multi-select) put an item in every matching bucket — by design,
  * so e.g. an issue with two assignees shows up under both. Pass any item
@@ -664,6 +679,9 @@ export function groupItemsBy(items: ProjectItem[], project: ProjectDetail, group
   for (const item of items) {
     // Sub-issues are shown nested under their parent issue, not as their own row.
     if (item.parentId) continue;
+    // Issues pulled in from a repo not actually linked to the project (e.g.
+    // via "relates to") aren't shown as their own row either.
+    if (!isInLinkedRepo(item, project)) continue;
     if (groupBy === "status") {
       add(item.status, item);
     } else if (groupBy === "assignee") {

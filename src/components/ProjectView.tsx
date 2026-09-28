@@ -450,6 +450,7 @@ export default function ProjectView({
           <LabelFilterSidebar
             projectId={project.id}
             items={project.items}
+            linkedRepos={project.linkedRepos}
             selected={selectedLabels}
             onToggle={toggleLabel}
             onClear={() => setSelectedLabels(new Set())}
