@@ -41,6 +41,7 @@ import RelationshipsSection from "./RelationshipsSection";
 import ExternalLink from "./ExternalLink";
 import LabelManager from "./LabelManager";
 import FieldOptionsManager from "./FieldOptionsManager";
+import SearchableSelect from "./SearchableSelect";
 
 interface Props {
   token: string;
@@ -428,17 +429,12 @@ export default function IssueDetailPanel({
               </button>
 
               {projectItem && project.statusFieldId && (
-                <select
+                <SearchableSelect
                   value={project.statusOptions.find((o) => o.name === projectItem.status)?.id ?? ""}
-                  onChange={(e) => changeStatus(e.target.value)}
-                  className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}
-                >
-                  {project.statusOptions.map((o) => (
-                    <option key={o.id} value={o.id} className="bg-neutral-900 text-neutral-100">
-                      {o.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={changeStatus}
+                  options={project.statusOptions.map((o) => ({ value: o.id, label: o.name }))}
+                  className={`rounded-full border px-2.5 py-1 text-left text-xs font-semibold ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}
+                />
               )}
 
               <span className="rounded-full border border-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-400">
@@ -505,36 +501,27 @@ export default function IssueDetailPanel({
                     </span>
                   ))}
                 </div>
-                <select
-                  value=""
-                  onChange={(e) => addAssignee(e.target.value)}
-                  className="mt-1.5 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1 text-xs text-neutral-400"
-                >
-                  <option value="">+ Aggiungi assegnatario</option>
-                  {detail.repoAssignableUsers
-                    .filter((u) => !detail.assignees.some((a) => a.id === u.id))
-                    .map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.login}
-                      </option>
-                    ))}
-                </select>
+                <div className="mt-1.5">
+                  <SearchableSelect
+                    value=""
+                    onChange={addAssignee}
+                    placeholder="+ Aggiungi assegnatario"
+                    options={detail.repoAssignableUsers
+                      .filter((u) => !detail.assignees.some((a) => a.id === u.id))
+                      .map((u) => ({ value: u.id, label: u.login }))}
+                    className="block w-full truncate rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1 text-left text-xs text-neutral-400 outline-none"
+                  />
+                </div>
               </div>
 
               <div>
                 <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-neutral-500">Milestone</h3>
-                <select
+                <SearchableSelect
                   value={detail.milestone?.id ?? ""}
-                  onChange={(e) => changeMilestone(e.target.value)}
-                  className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-sm"
-                >
-                  <option value="">Nessuna milestone</option>
-                  {detail.repoMilestones.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.title}
-                    </option>
-                  ))}
-                </select>
+                  onChange={changeMilestone}
+                  placeholder="Nessuna milestone"
+                  options={detail.repoMilestones.map((m) => ({ value: m.id, label: m.title }))}
+                />
               </div>
             </section>
 
@@ -550,20 +537,15 @@ export default function IssueDetailPanel({
                   <LabelChip key={l.id} name={l.name} color={l.color} onRemove={() => removeLabel(l.id)} />
                 ))}
               </div>
-              <select
-                value=""
-                onChange={(e) => addLabel(e.target.value)}
-                className="mt-1.5 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1 text-xs text-neutral-400"
-              >
-                <option value="">+ Aggiungi label</option>
-                {detail.repoLabels
-                  .filter((l) => !detail.labels.some((x) => x.id === l.id))
-                  .map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name}
-                    </option>
-                  ))}
-              </select>
+              <div className="mt-1.5">
+                <SearchableSelect
+                  value=""
+                  onChange={addLabel}
+                  placeholder="+ Aggiungi label"
+                  options={detail.repoLabels.filter((l) => !detail.labels.some((x) => x.id === l.id)).map((l) => ({ value: l.id, label: l.name }))}
+                  className="block w-full truncate rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1 text-left text-xs text-neutral-400 outline-none"
+                />
+              </div>
             </section>
 
             {projectItem && editableFields.length > 0 && (
@@ -577,7 +559,7 @@ export default function IssueDetailPanel({
                       const options = issueField?.options ?? f.options;
                       const currentOptionId = value?.type === "singleSelect" ? options?.find((o) => o.name === value.name)?.id : undefined;
                       return (
-                        <label key={f.id} className="text-xs text-neutral-500">
+                        <div key={f.id} className="text-xs text-neutral-500">
                           <div className="flex items-center justify-between">
                             {f.name}
                             {!issueField && (
@@ -590,19 +572,14 @@ export default function IssueDetailPanel({
                               </button>
                             )}
                           </div>
-                          <select
-                            value={currentOptionId ?? ""}
-                            onChange={(e) => changeSingleSelectField(f.id, f.name, e.target.value)}
-                            className="mt-1 block w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
-                          >
-                            <option value="">—</option>
-                            {options?.map((o) => (
-                              <option key={o.id} value={o.id}>
-                                {o.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                          <div className="mt-1">
+                            <SearchableSelect
+                              value={currentOptionId ?? ""}
+                              onChange={(v) => changeSingleSelectField(f.id, f.name, v)}
+                              options={(options ?? []).map((o) => ({ value: o.id, label: o.name }))}
+                            />
+                          </div>
+                        </div>
                       );
                     }
                     if (f.dataType === "MULTI_SELECT") {

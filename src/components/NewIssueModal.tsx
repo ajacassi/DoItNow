@@ -33,6 +33,7 @@ import LabelChip from "./LabelChip";
 import ImageUploadButton from "./ImageUploadButton";
 import LabelManager from "./LabelManager";
 import FieldOptionsManager from "./FieldOptionsManager";
+import SearchableSelect from "./SearchableSelect";
 
 interface Props {
   token: string;
@@ -262,22 +263,18 @@ export default function NewIssueModal({
           <div className="mt-3 rounded-lg border border-red-900 bg-red-950/40 px-3 py-2 text-xs text-red-300">{error}</div>
         )}
 
-        <label className="mt-4 block text-xs font-medium uppercase tracking-wide text-neutral-500">
+        <div className="mt-4 text-xs font-medium uppercase tracking-wide text-neutral-500">
           Repository
-          <select
-            value={repoId}
-            onChange={(e) => setRepoId(e.target.value)}
-            disabled={reposLoading}
-            className="mt-1 block w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-2 text-sm text-neutral-100 disabled:opacity-50"
-          >
-            <option value="">{reposLoading ? "Carico…" : "-- seleziona repository --"}</option>
-            {repos.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-        </label>
+          <div className="mt-1">
+            <SearchableSelect
+              value={repoId}
+              onChange={setRepoId}
+              disabled={reposLoading}
+              placeholder={reposLoading ? "Carico…" : "-- seleziona repository --"}
+              options={repos.map((r) => ({ value: r.id, label: r.name }))}
+            />
+          </div>
+        </div>
 
         <label className="mt-4 block text-xs font-medium uppercase tracking-wide text-neutral-500">
           Titolo
@@ -319,39 +316,30 @@ export default function NewIssueModal({
         {metadata && (
           <>
             <div className="mt-4 grid grid-cols-2 gap-4">
-              <label className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+              <div className="text-xs font-medium uppercase tracking-wide text-neutral-500">
                 Assegnatari
-                <select
-                  value=""
-                  onChange={(e) => e.target.value && setAssigneeIds((ids) => [...ids, e.target.value])}
-                  className="mt-1 block w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-400"
-                >
-                  <option value="">+ Aggiungi</option>
-                  {metadata.assignableUsers
-                    .filter((u) => !assigneeIds.includes(u.id))
-                    .map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.login}
-                      </option>
-                    ))}
-                </select>
-              </label>
+                <div className="mt-1">
+                  <SearchableSelect
+                    value=""
+                    onChange={(v) => v && setAssigneeIds((ids) => [...ids, v])}
+                    placeholder="+ Aggiungi"
+                    options={metadata.assignableUsers.filter((u) => !assigneeIds.includes(u.id)).map((u) => ({ value: u.id, label: u.login }))}
+                    className="block w-full truncate rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-left text-xs text-neutral-400 outline-none"
+                  />
+                </div>
+              </div>
 
-              <label className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+              <div className="text-xs font-medium uppercase tracking-wide text-neutral-500">
                 Milestone
-                <select
-                  value={milestoneId}
-                  onChange={(e) => setMilestoneId(e.target.value)}
-                  className="mt-1 block w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
-                >
-                  <option value="">Nessuna</option>
-                  {metadata.milestones.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <div className="mt-1">
+                  <SearchableSelect
+                    value={milestoneId}
+                    onChange={setMilestoneId}
+                    placeholder="Nessuna"
+                    options={metadata.milestones.map((m) => ({ value: m.id, label: m.title }))}
+                  />
+                </div>
+              </div>
             </div>
 
             {assigneeIds.length > 0 && (
@@ -385,20 +373,15 @@ export default function NewIssueModal({
                 Gestisci label…
               </button>
             </div>
-            <select
-              value=""
-              onChange={(e) => e.target.value && setLabelIds((ids) => [...ids, e.target.value])}
-              className="mt-1 block w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-400"
-            >
-              <option value="">+ Aggiungi</option>
-              {metadata.labels
-                .filter((l) => !labelIds.includes(l.id))
-                .map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-            </select>
+            <div className="mt-1">
+              <SearchableSelect
+                value=""
+                onChange={(v) => v && setLabelIds((ids) => [...ids, v])}
+                placeholder="+ Aggiungi"
+                options={metadata.labels.filter((l) => !labelIds.includes(l.id)).map((l) => ({ value: l.id, label: l.name }))}
+                className="block w-full truncate rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-left text-xs text-neutral-400 outline-none"
+              />
+            </div>
             {labelIds.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {labelIds.map((id) => {
@@ -422,21 +405,16 @@ export default function NewIssueModal({
                 <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">Campi del progetto</h3>
                 <div className="grid grid-cols-2 gap-3">
                   {project.statusFieldId && (
-                    <label className="text-xs text-neutral-500">
+                    <div className="text-xs text-neutral-500">
                       Status
-                      <select
-                        value={statusId}
-                        onChange={(e) => setStatusId(e.target.value)}
-                        className="mt-1 block w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
-                      >
-                        <option value="">—</option>
-                        {project.statusOptions.map((o) => (
-                          <option key={o.id} value={o.id}>
-                            {o.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                      <div className="mt-1">
+                        <SearchableSelect
+                          value={statusId}
+                          onChange={setStatusId}
+                          options={project.statusOptions.map((o) => ({ value: o.id, label: o.name }))}
+                        />
+                      </div>
+                    </div>
                   )}
 
                   {editableFields.map((f) => {
@@ -444,7 +422,7 @@ export default function NewIssueModal({
                     if (f.dataType === "SINGLE_SELECT") {
                       const options = issueField?.options ?? f.options;
                       return (
-                        <label key={f.id} className="text-xs text-neutral-500">
+                        <div key={f.id} className="text-xs text-neutral-500">
                           <div className="flex items-center justify-between">
                             {f.name}
                             {!issueField && (
@@ -457,19 +435,14 @@ export default function NewIssueModal({
                               </button>
                             )}
                           </div>
-                          <select
-                            value={fieldInputs[f.name] ?? ""}
-                            onChange={(e) => setFieldInput(f.name, e.target.value)}
-                            className="mt-1 block w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
-                          >
-                            <option value="">—</option>
-                            {options?.map((o) => (
-                              <option key={o.id} value={o.id}>
-                                {o.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                          <div className="mt-1">
+                            <SearchableSelect
+                              value={fieldInputs[f.name] ?? ""}
+                              onChange={(v) => setFieldInput(f.name, v)}
+                              options={(options ?? []).map((o) => ({ value: o.id, label: o.name }))}
+                            />
+                          </div>
+                        </div>
                       );
                     }
                     if (f.dataType === "MULTI_SELECT") {

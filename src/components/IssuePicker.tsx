@@ -7,6 +7,7 @@ import {
   type SubIssueSummary,
   type ProjectDetail,
 } from "../lib/github";
+import SearchableSelect from "./SearchableSelect";
 
 interface Props {
   token: string;
@@ -128,18 +129,15 @@ export default function IssuePicker({ token, org, project, value, onChange, excl
 
       {showNumberSearch && (
         <div className="mt-2 flex gap-2">
-          <select
-            value={repoId}
-            onChange={(e) => setRepoId(e.target.value)}
-            className="rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1 text-xs text-neutral-100"
-          >
-            <option value="">{repos == null ? "Carico…" : "-- repo --"}</option>
-            {repos?.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
+          <div className="w-28">
+            <SearchableSelect
+              value={repoId}
+              onChange={setRepoId}
+              placeholder={repos == null ? "Carico…" : "-- repo --"}
+              options={(repos ?? []).map((r) => ({ value: r.id, label: r.name }))}
+              className="block w-full truncate rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1 text-left text-xs text-neutral-100 outline-none"
+            />
+          </div>
           <input
             value={number}
             onChange={(e) => setNumber(e.target.value)}
