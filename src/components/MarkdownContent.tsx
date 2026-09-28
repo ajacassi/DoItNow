@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { renderMarkdown } from "../lib/markdown";
 
 interface Props {
@@ -45,6 +46,22 @@ export default function MarkdownContent({ markdown, token, className, onClick, o
         a.classList.add("cursor-pointer");
         cleanups.push(() => a.removeEventListener("click", handler));
       }
+    }
+
+    // A plain <a href> click would otherwise navigate the webview itself —
+    // there's no external browser tab to land in, so it just replaces the
+    // app with a blank/broken page (worst for non-HTML targets like a PDF or
+    // .docx attachment link). Route every other link through the OS browser.
+    for (const a of Array.from(container.querySelectorAll<HTMLAnchorElement>("a[href]"))) {
+      if (a.getAttribute("href")?.startsWith("#issue-")) continue;
+      const href = a.href;
+      const handler = (e: MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openUrl(href).catch(() => {});
+      };
+      a.addEventListener("click", handler);
+      cleanups.push(() => a.removeEventListener("click", handler));
     }
 
     for (const img of Array.from(container.querySelectorAll("img"))) {

@@ -1816,12 +1816,13 @@ export async function fetchIssueByNumber(
 }
 
 // ---------------------------------------------------------------------------
-// Image attachments. GitHub has no public/documented API for this — this
-// calls the same undocumented endpoint the github.com web editor itself uses
-// for drag-and-drop image uploads. It works today and behaves exactly like a
-// native attachment (including on private repos), but it's an internal
-// implementation detail we don't control: GitHub could change or remove it
-// without notice.
+// File attachments (images, PDFs, Office docs, ...). GitHub has no public/
+// documented API for this — this calls the same undocumented endpoint the
+// github.com web editor itself uses for drag-and-drop/paste attachment
+// uploads, for any file type, not just images. It works today and behaves
+// exactly like a native attachment (including on private repos), but it's an
+// internal implementation detail we don't control: GitHub could change or
+// remove it without notice.
 // ---------------------------------------------------------------------------
 
 function extractAttachmentUrl(data: unknown): string | null {
@@ -1836,7 +1837,7 @@ function extractAttachmentUrl(data: unknown): string | null {
   return null;
 }
 
-export async function uploadImageAttachment(
+export async function uploadFileAttachment(
   token: string,
   repositoryDatabaseId: number,
   fileName: string,
@@ -1861,7 +1862,9 @@ export async function uploadImageAttachment(
 
   if (!res.ok) {
     throw new GithubApiError(
-      `Upload immagine non riuscito (${res.status}). Questo endpoint non è ufficiale e potrebbe essere cambiato lato GitHub.`,
+      res.status === 422
+        ? "GitHub accetta solo immagini e video tramite questo caricamento."
+        : `Caricamento allegato non riuscito (${res.status}). Questo endpoint non è ufficiale e potrebbe essere cambiato lato GitHub.`,
       res.status,
     );
   }
@@ -1869,7 +1872,7 @@ export async function uploadImageAttachment(
   const data = await res.json();
   const url = extractAttachmentUrl(data);
   if (!url) {
-    throw new GithubApiError("Risposta inattesa dal servizio di upload immagini di GitHub.");
+    throw new GithubApiError("Risposta inattesa dal servizio di upload allegati di GitHub.");
   }
   return url;
 }

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { uploadImageAttachment, GithubApiError, type RepoUser } from "../lib/github";
+import { uploadFileAttachment, GithubApiError, type RepoUser } from "../lib/github";
 
 export interface IssueRefCandidate {
   number: number;
@@ -16,7 +16,7 @@ interface Props {
   placeholder?: string;
   className: string;
   autoFocus?: boolean;
-  /** Both required to enable "paste an image" — pasting an image with either missing is left as plain text paste. */
+  /** Both required to enable "paste/drop an image or video" — with either missing, a paste is left as plain text. */
   token?: string;
   repositoryDatabaseId?: number | null;
 }
@@ -133,14 +133,24 @@ export default function MentionTextarea({
 
   async function uploadFileAndInsert(file: File) {
     if (!token || !repositoryDatabaseId) return;
+    const isImage = file.type.startsWith("image/");
+    const isVideo = file.type.startsWith("video/");
+    if (!isImage && !isVideo) {
+      // GitHub's token-authenticated upload endpoint only accepts images and
+      // video — anything else (PDF, Office docs, zip...) needs the full
+      // browser-session upload flow, which isn't reachable with a PAT/OAuth
+      // token. Reject up front instead of a confusing 422 from the server.
+      setPasteError('GitHub non permette di caricare questo tipo di file tramite token — solo immagini e video. Allegalo dall\'interfaccia web di GitHub ("Apri su GitHub").');
+      return;
+    }
     setPasting(true);
     setPasteError(null);
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const mime = file.type || "image/png";
+      const mime = file.type || "application/octet-stream";
       const fileName = file.name && file.name !== "image.png" ? file.name : `image-${Date.now()}.${guessExtension(mime)}`;
-      const url = await uploadImageAttachment(token, repositoryDatabaseId, fileName, mime, bytes);
-      const markdown = `![${fileName}](${url})`;
+      const url = await uploadFileAttachment(token, repositoryDatabaseId, fileName, mime, bytes);
+      const markdown = isImage ? `![${fileName}](${url})` : `[${fileName}](${url})`;
 
       const el = ref.current;
       const cursor = el?.selectionStart ?? value.length;
@@ -152,7 +162,7 @@ export default function MentionTextarea({
         el?.setSelectionRange(newCursor, newCursor);
       });
     } catch (err) {
-      setPasteError(err instanceof GithubApiError ? err.message : "Caricamento immagine non riuscito.");
+      setPasteError(err instanceof GithubApiError ? err.message : "Caricamento allegato non riuscito.");
     } finally {
       setPasting(false);
     }
@@ -160,10 +170,8 @@ export default function MentionTextarea({
 
   function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
     if (!token || !repositoryDatabaseId) return; // no upload target — fall through to normal paste
-    const imageItem = Array.from(e.clipboardData.items).find((it) => it.type.startsWith("image/"));
-    if (!imageItem) return;
-    const file = imageItem.getAsFile();
-    if (!file) return;
+    const file = e.clipboardData.files[0];
+    if (!file) return; // plain text paste — let it proceed normally
     e.preventDefault();
     uploadFileAndInsert(file);
   }
@@ -179,7 +187,7 @@ export default function MentionTextarea({
   function handleDrop(e: React.DragEvent<HTMLTextAreaElement>) {
     setDragActive(false);
     if (!token || !repositoryDatabaseId) return;
-    const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith("image/"));
+    const file = e.dataTransfer.files[0];
     if (!file) return;
     e.preventDefault();
     uploadFileAndInsert(file);
@@ -202,8 +210,8 @@ export default function MentionTextarea({
         autoFocus={autoFocus}
         className={`${className} ${dragActive ? "outline outline-2 outline-indigo-500" : ""}`}
       />
-      {dragActive && <p className="mt-1 text-xs text-indigo-400">Rilascia per caricare l'immagine…</p>}
-      {pasting && <p className="mt-1 text-xs text-neutral-500">Carico immagine…</p>}
+      {dragActive && <p className="mt-1 text-xs text-indigo-400">Rilascia per caricare l'allegato…</p>}
+      {pasting && <p className="mt-1 text-xs text-neutral-500">Carico allegato…</p>}
       {pasteError && <p className="mt-1 text-xs text-red-400">{pasteError}</p>}
       {/* Deliberately in normal flow (not position:absolute): an absolutely
           positioned dropdown gets clipped by the scrollable panels this

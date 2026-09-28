@@ -30,7 +30,7 @@ import { realProjectFields } from "../lib/columns";
 import { colorStyle } from "../lib/colors";
 import MentionTextarea from "./MentionTextarea";
 import LabelChip from "./LabelChip";
-import ImageUploadButton from "./ImageUploadButton";
+import FileUploadButton from "./FileUploadButton";
 import LabelManager from "./LabelManager";
 import FieldOptionsManager from "./FieldOptionsManager";
 import SearchableSelect from "./SearchableSelect";
@@ -305,7 +305,7 @@ export default function NewIssueModal({
             repositoryDatabaseId={repos.find((r) => r.id === repoId)?.databaseId ?? null}
           />
           <div className="mt-1.5">
-            <ImageUploadButton
+            <FileUploadButton
               token={token}
               repositoryDatabaseId={repos.find((r) => r.id === repoId)?.databaseId ?? null}
               onInsert={(md) => setBody((prev) => (prev.trim() ? `${prev}\n\n${md}` : md))}

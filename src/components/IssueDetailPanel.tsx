@@ -34,7 +34,7 @@ import { colorStyle } from "../lib/colors";
 import { realProjectFields } from "../lib/columns";
 import MarkdownContent from "./MarkdownContent";
 import LabelChip from "./LabelChip";
-import ImageUploadButton from "./ImageUploadButton";
+import FileUploadButton from "./FileUploadButton";
 import MentionTextarea from "./MentionTextarea";
 import SubIssuesSection from "./SubIssuesSection";
 import RelationshipsSection from "./RelationshipsSection";
@@ -464,7 +464,7 @@ export default function IssueDetailPanel({
                     repositoryDatabaseId={detail.repositoryDatabaseId}
                   />
                   <div className="mt-1.5">
-                    <ImageUploadButton
+                    <FileUploadButton
                       token={token}
                       repositoryDatabaseId={detail.repositoryDatabaseId}
                       onInsert={(md) => setBodyDraft((prev) => (prev.trim() ? `${prev}\n\n${md}` : md))}
@@ -793,7 +793,7 @@ export default function IssueDetailPanel({
                 >
                   {postingComment ? "Invio…" : "Commenta"}
                 </button>
-                <ImageUploadButton
+                <FileUploadButton
                   token={token}
                   repositoryDatabaseId={detail.repositoryDatabaseId}
                   onInsert={(md) => setCommentDraft((prev) => (prev.trim() ? `${prev}\n\n${md}` : md))}
