@@ -163,6 +163,19 @@ export async function setSubGroupBy(projectId: string, key: string): Promise<voi
   await store.save();
 }
 
+// Whether the project picker also lists closed projects (hidden by default).
+export async function getShowClosedProjects(): Promise<boolean> {
+  const store = await getStore();
+  const data = await store.get<boolean>("show_closed_projects");
+  return data ?? false;
+}
+
+export async function setShowClosedProjects(value: boolean): Promise<void> {
+  const store = await getStore();
+  await store.set("show_closed_projects", value);
+  await store.save();
+}
+
 export type ThemeName = "vivid" | "dark";
 
 const THEME_KEY = "theme";

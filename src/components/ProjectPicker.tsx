@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import type { ProjectSummary } from "../lib/github";
+import { getShowClosedProjects, setShowClosedProjects } from "../lib/store";
 
 interface Props {
   org: string;
@@ -26,6 +28,21 @@ export default function ProjectPicker({
   // Once we already have a remembered/fetched org, show a compact summary
   // instead of the input, with a way back into edit mode.
   const [editingOrg, setEditingOrg] = useState(!org);
+  const [showClosed, setShowClosed] = useState(false);
+  const [version, setVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    getShowClosedProjects().then(setShowClosed);
+    getVersion().then(setVersion).catch(() => {});
+  }, []);
+
+  function toggleShowClosed(value: boolean) {
+    setShowClosed(value);
+    void setShowClosedProjects(value);
+  }
+
+  const closedCount = projects.filter((p) => p.closed).length;
+  const visibleProjects = showClosed ? projects : projects.filter((p) => !p.closed);
 
   // Collapse into the compact view once a fetch resolves successfully — this
   // covers both a manual search and the automatic fetch for a remembered org
@@ -45,7 +62,10 @@ export default function ProjectPicker({
   return (
     <div className="min-h-screen w-full bg-neutral-950 text-neutral-100">
       <header className="flex items-center justify-between border-b border-neutral-800 px-8 py-4">
-        <h1 className="text-lg font-semibold tracking-tight">DoItNow</h1>
+        <h1 className="flex items-baseline gap-2 text-lg font-semibold tracking-tight">
+          DoItNow
+          {version && <span className="text-xs font-normal text-neutral-500">v{version}</span>}
+        </h1>
         <button onClick={onLogout} className="text-xs text-neutral-500 hover:text-neutral-300">
           Cambia token
         </button>
@@ -89,9 +109,21 @@ export default function ProjectPicker({
         {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
         {loading && !editingOrg && <p className="mt-8 text-sm text-neutral-500">Carico i progetti…</p>}
 
-        {projects.length > 0 && (
-          <ul className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {projects.map((p) => (
+        {closedCount > 0 && (
+          <label className="mt-6 flex w-fit cursor-pointer items-center gap-2 text-xs text-neutral-400">
+            <input
+              type="checkbox"
+              checked={showClosed}
+              onChange={(e) => toggleShowClosed(e.target.checked)}
+              className="accent-indigo-500"
+            />
+            Mostra progetti chiusi ({closedCount})
+          </label>
+        )}
+
+        {visibleProjects.length > 0 && (
+          <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {visibleProjects.map((p) => (
               <li key={p.id}>
                 <button
                   onClick={() => onSelect(p)}
@@ -115,7 +147,7 @@ export default function ProjectPicker({
           </ul>
         )}
 
-        {!loading && !error && projects.length === 0 && touched && (
+        {!loading && !error && visibleProjects.length === 0 && touched && (
           <p className="mt-8 text-sm text-neutral-500">Nessun progetto trovato per questa organizzazione.</p>
         )}
       </main>
