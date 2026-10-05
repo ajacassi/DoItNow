@@ -102,6 +102,15 @@ export interface ProjectField {
   options?: StatusOption[];
 }
 
+/**
+ * Sentinel `IssueFieldDef.id` for GitHub's built-in issue *Type* (Bug/Feature/
+ * Task...). It's modelled as an issue field so every screen that already
+ * handles those (columns, grouping, query, detail panel, new issue) just
+ * works, but it's written via `updateIssue(issueTypeId)` — see
+ * setIssueFieldSingleSelect/clearIssueFieldValue.
+ */
+export const ISSUE_TYPE_FIELD_ID = "__issue_type__";
+
 /** An "Issue Field" (org-level custom field on issues, mirrored into project views) — distinct from a true ProjectV2 custom field. */
 export interface IssueFieldDef {
   id: string;
@@ -246,6 +255,7 @@ const PROJECT_ITEM_FRAGMENT = `
         state
         author { login avatarUrl }
         parent { id }
+        issueType { name color }
         subIssuesSummary { total completed percentCompleted }
         blockedBy(first: 10) { nodes { id } }
         repository { name owner { login } }
@@ -279,6 +289,9 @@ const PROJECT_ITEM_FRAGMENT = `
 const PROJECT_ITEMS_QUERY = `
   query ProjectItems($org: String!, $number: Int!) {
     organization(login: $org) {
+      issueTypes(first: 25) {
+        nodes { id name color }
+      }
       issueFields(first: 100) {
         nodes {
           __typename
@@ -405,6 +418,7 @@ interface RawProjectItemNode {
     state?: string;
     author?: ProjectItemUser | null;
     parent?: { id: string } | null;
+    issueType?: { name: string; color: string } | null;
     subIssuesSummary?: SubIssuesSummary | null;
     blockedBy?: { nodes: Array<{ id: string }> };
     repository?: { name: string; owner: { login: string } };
@@ -418,6 +432,7 @@ interface RawProjectItemNode {
 
 interface RawProjectItemsResponse {
   organization: {
+    issueTypes: { nodes: Array<{ id: string; name: string; color: string }> };
     issueFields: { nodes: RawIssueFieldNode[] };
     projectV2: {
       id: string;
@@ -542,6 +557,37 @@ export async function fetchProjectDetail(token: string, org: string, number: num
     };
   }
 
+  // GitHub's built-in issue Type: the project's own "Type" field comes back
+  // with a non-select dataType and no per-item value we can read, so we
+  // present it as a regular single-select fed from the org's issue types and
+  // fill each item's value from `Issue.issueType`.
+  const issueTypes = data.organization!.issueTypes?.nodes ?? [];
+  let typeFieldName: string | null = null;
+  if (issueTypes.length > 0) {
+    const typeOptions: StatusOption[] = issueTypes.map((t) => ({ id: t.id, name: t.name, color: t.color }));
+    const existing = fields.find(
+      (f) =>
+        f.dataType === "ISSUE_TYPE" ||
+        (f.name.toLowerCase() === "type" && !f.options?.length && !["TEXT", "NUMBER", "DATE"].includes(f.dataType)),
+    );
+    const collides = !existing && fields.some((f) => f.name.toLowerCase() === "type");
+    if (!collides) {
+      typeFieldName = existing?.name ?? "Type";
+      if (existing) {
+        existing.dataType = "SINGLE_SELECT";
+        existing.options = typeOptions;
+      } else {
+        fields.push({ id: ISSUE_TYPE_FIELD_ID, name: typeFieldName, dataType: "SINGLE_SELECT", options: typeOptions });
+      }
+      issueFieldsByName[typeFieldName] = {
+        id: ISSUE_TYPE_FIELD_ID,
+        name: typeFieldName,
+        dataType: "SINGLE_SELECT",
+        options: typeOptions,
+      };
+    }
+  }
+
   const items: ProjectItem[] = allItemNodes
     .filter((node) => node.content)
     .map((node) => {
@@ -552,6 +598,10 @@ export async function fetchProjectDetail(token: string, org: string, number: num
         const fieldName = fieldNameOf(raw);
         const parsed = fieldName ? parseFieldValue(raw) : null;
         if (fieldName && parsed) fieldMap[fieldName] = parsed;
+      }
+
+      if (typeFieldName && content.issueType) {
+        fieldMap[typeFieldName] = { type: "singleSelect", name: content.issueType.name, color: content.issueType.color };
       }
 
       const statusValue = fieldMap[STATUS_FIELD_NAME];
@@ -1503,6 +1553,7 @@ export async function setIssueFieldSingleSelect(
   fieldId: string,
   optionId: string,
 ): Promise<void> {
+  if (fieldId === ISSUE_TYPE_FIELD_ID) return setIssueType(token, issueId, optionId);
   await graphql(
     token,
     `mutation($issueId: ID!, $fieldId: ID!, $optionId: ID!) {
@@ -1550,7 +1601,21 @@ export async function setIssueFieldNumber(token: string, issueId: string, fieldI
   );
 }
 
+/** Set (or, with null, remove) the issue's built-in Type. */
+async function setIssueType(token: string, issueId: string, typeId: string | null): Promise<void> {
+  await graphql(
+    token,
+    `mutation($issueId: ID!, $typeId: ID) {
+      updateIssue(input: { id: $issueId, issueTypeId: $typeId }) {
+        clientMutationId
+      }
+    }`,
+    { issueId, typeId },
+  );
+}
+
 export async function clearIssueFieldValue(token: string, issueId: string, fieldId: string): Promise<void> {
+  if (fieldId === ISSUE_TYPE_FIELD_ID) return setIssueType(token, issueId, null);
   await graphql(
     token,
     `mutation($issueId: ID!, $fieldId: ID!) {
