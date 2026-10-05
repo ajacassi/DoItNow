@@ -1,5 +1,5 @@
 import type { ItemFieldValue, ProjectDetail, ProjectItem } from "./github";
-import { ASSIGNEE_COLUMN, CREATED_COLUMN, UPDATED_COLUMN, CLOSED_COLUMN } from "./columns";
+import { ASSIGNEE_COLUMN, CREATED_COLUMN, UPDATED_COLUMN, CLOSED_COLUMN, REPOSITORY_COLUMN } from "./columns";
 
 export const TITLE_COLUMN = "title";
 
@@ -38,6 +38,8 @@ function sortValueFor(item: ProjectItem, project: ProjectDetail, key: string): S
       return item.title;
     case ASSIGNEE_COLUMN:
       return item.assignees[0]?.login ?? null;
+    case REPOSITORY_COLUMN:
+      return item.repository;
     case CREATED_COLUMN:
       return item.createdAt;
     case UPDATED_COLUMN:

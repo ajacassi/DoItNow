@@ -186,6 +186,12 @@ export interface ProjectDetail {
    * best available substitute until GitHub adds it.
    */
   linkedRepos: { owner: string; name: string }[];
+  /**
+   * View-level switch, never set by the fetch: when true, items from repos
+   * that aren't linked to the project are shown too (see isInLinkedRepo).
+   * Absent/false keeps the default linked-repos-only behaviour.
+   */
+  includeAllRepos?: boolean;
   items: ProjectItem[];
 }
 
@@ -705,6 +711,7 @@ export function groupColor(project: ProjectDetail, groupBy: string, groupName: s
  * linked repos at all, so this never filters blind.
  */
 export function isInLinkedRepo(item: ProjectItem, project: ProjectDetail): boolean {
+  if (project.includeAllRepos) return true;
   if (project.linkedRepos.length === 0) return true;
   if (!item.repositoryOwner || !item.repository) return false;
   return project.linkedRepos.some((r) => r.owner === item.repositoryOwner && r.name === item.repository);

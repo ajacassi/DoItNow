@@ -13,6 +13,8 @@ import {
   setSortKeys,
   getSubGroupBy,
   setSubGroupBy,
+  getIncludeAllRepos,
+  setIncludeAllRepos,
   type SavedView,
 } from "../lib/store";
 import { defaultColumns, orderColumns } from "../lib/columns";
@@ -154,6 +156,23 @@ export default function ProjectView({
     setSubGroupBy(project.id, next);
   }
 
+  // Whether to also show issues from repos not linked to the project (off by
+  // default = the original behaviour). One setting per project, like the ones above.
+  const [includeAllRepos, setIncludeAllReposState] = useState(false);
+
+  useEffect(() => {
+    setIncludeAllReposState(false);
+    getIncludeAllRepos(project.id).then(setIncludeAllReposState);
+  }, [project.id]);
+
+  function toggleIncludeAllRepos() {
+    setIncludeAllReposState((prev) => {
+      const next = !prev;
+      setIncludeAllRepos(project.id, next);
+      return next;
+    });
+  }
+
   // Total issue count (all states) for the repo most of this project's items
   // actually live in (see mostCommonRepo) — a stand-in for GitHub's own
   // "Default repository" setting, which isn't exposed on ProjectV2 in the
@@ -284,6 +303,7 @@ export default function ProjectView({
   }, [queryText]);
 
   const visibleProject: ProjectDetail = useMemo(() => {
+    const base: ProjectDetail = includeAllRepos ? { ...project, includeAllRepos: true } : project;
     let items = project.items;
     if (selectedLabels.size > 0) {
       items = items.filter(
@@ -293,8 +313,8 @@ export default function ProjectView({
     if (queryText.trim()) {
       items = items.filter((item) => matchesIssueQuery(parsedQuery, item, project));
     }
-    return items === project.items ? project : { ...project, items };
-  }, [project, selectedLabels, queryText, parsedQuery]);
+    return items === project.items ? base : { ...base, items };
+  }, [project, includeAllRepos, selectedLabels, queryText, parsedQuery]);
 
   function openNewIssue(statusId?: string) {
     setNewIssueStatusId(statusId ?? null);
@@ -349,6 +369,19 @@ export default function ProjectView({
                 {selectedLabels.size}
               </span>
             )}
+          </button>
+          <button
+            onClick={toggleIncludeAllRepos}
+            title={
+              includeAllRepos
+                ? "Stai vedendo anche le issue di repository non collegati al progetto — clicca per mostrare solo quelle dei repo del progetto"
+                : "Mostra solo le issue dei repository collegati al progetto — clicca per includere anche quelle di altri repository"
+            }
+            className={`rounded-lg border px-3 py-1.5 text-xs transition ${
+              includeAllRepos ? "border-indigo-500 text-indigo-300" : "border-neutral-800 text-neutral-300 hover:border-neutral-500"
+            }`}
+          >
+            Tutti i repo
           </button>
           {view === "table" && <ColumnPicker project={project} selected={visibleColumns} onToggle={toggleColumn} />}
           {view === "table" && <SortPicker project={project} sortKeys={sortKeys} onChange={changeSortKeys} />}
@@ -450,7 +483,7 @@ export default function ProjectView({
           <LabelFilterSidebar
             projectId={project.id}
             items={project.items}
-            linkedRepos={project.linkedRepos}
+            linkedRepos={includeAllRepos ? [] : project.linkedRepos}
             selected={selectedLabels}
             onToggle={toggleLabel}
             onClear={() => setSelectedLabels(new Set())}

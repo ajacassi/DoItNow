@@ -2,7 +2,15 @@ import { useState } from "react";
 import type { ProjectDetail, ProjectField, ProjectItem, ItemFieldValue } from "../lib/github";
 import { groupItemsBy, visibleGroupEntries, groupColor } from "../lib/github";
 import { colorStyle } from "../lib/colors";
-import { ASSIGNEE_COLUMN, AUTHOR_COLUMN, CREATED_COLUMN, UPDATED_COLUMN, CLOSED_COLUMN, availableColumns } from "../lib/columns";
+import {
+  ASSIGNEE_COLUMN,
+  AUTHOR_COLUMN,
+  CREATED_COLUMN,
+  UPDATED_COLUMN,
+  CLOSED_COLUMN,
+  REPOSITORY_COLUMN,
+  availableColumns,
+} from "../lib/columns";
 import { sortItems, type SortKey } from "../lib/sort";
 import SubIssueProgress from "./SubIssueProgress";
 import ExternalLink from "./ExternalLink";
@@ -99,6 +107,15 @@ function AuthorCell({ item }: { item: ProjectItem }) {
       <img src={item.author.avatarUrl} alt={item.author.login} className="h-5 w-5 rounded-full border border-neutral-900" />
       <span className="truncate text-xs text-neutral-300">{item.author.login}</span>
     </div>
+  );
+}
+
+function RepositoryCell({ item }: { item: ProjectItem }) {
+  if (!item.repository) return <span className="text-neutral-700">—</span>;
+  return (
+    <span className="block truncate text-xs text-neutral-300" title={`${item.repositoryOwner ?? ""}/${item.repository}`}>
+      {item.repository}
+    </span>
   );
 }
 
@@ -210,6 +227,8 @@ export default function ProjectTable({
                   <AssigneeCell item={item} />
                 ) : key === AUTHOR_COLUMN ? (
                   <AuthorCell item={item} />
+                ) : key === REPOSITORY_COLUMN ? (
+                  <RepositoryCell item={item} />
                 ) : key === CREATED_COLUMN ? (
                   <DateCell iso={item.createdAt} />
                 ) : key === UPDATED_COLUMN ? (

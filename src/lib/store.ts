@@ -176,6 +176,20 @@ export async function setShowClosedProjects(value: boolean): Promise<void> {
   await store.save();
 }
 
+// Whether a project also shows issues from repos that aren't linked to it
+// (hidden by default — the long-standing behaviour). Per project, like columns.
+export async function getIncludeAllRepos(projectId: string): Promise<boolean> {
+  const store = await getStore();
+  const data = await store.get<boolean>(`include_all_repos_${projectId}`);
+  return data ?? false;
+}
+
+export async function setIncludeAllRepos(projectId: string, value: boolean): Promise<void> {
+  const store = await getStore();
+  await store.set(`include_all_repos_${projectId}`, value);
+  await store.save();
+}
+
 export type ThemeName = "vivid" | "dark";
 
 const THEME_KEY = "theme";

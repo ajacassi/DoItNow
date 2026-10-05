@@ -5,10 +5,12 @@ export const AUTHOR_COLUMN = "author";
 export const CREATED_COLUMN = "created";
 export const UPDATED_COLUMN = "updated";
 export const CLOSED_COLUMN = "closed";
+export const REPOSITORY_COLUMN = "repository";
 
 const BUILT_IN_COLUMNS = [
   { key: ASSIGNEE_COLUMN, label: "Assegnatario" },
   { key: AUTHOR_COLUMN, label: "Autore" },
+  { key: REPOSITORY_COLUMN, label: "Repository" },
   { key: CREATED_COLUMN, label: "Creato il" },
   { key: UPDATED_COLUMN, label: "Aggiornato il" },
   { key: CLOSED_COLUMN, label: "Chiuso il" },
