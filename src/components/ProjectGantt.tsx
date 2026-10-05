@@ -261,12 +261,13 @@ export default function ProjectGantt({ project, subGroupBy, reversed, onOpenItem
                           key={row.item.id}
                           onClick={() => onOpenItem(row.item)}
                           style={{ height: ROW_H }}
-                          title={row.start ? row.item.title : `${row.item.title} — nessuna data impostata`}
+                          title={`${row.item.number != null ? `#${row.item.number} ` : ""}${row.item.title}${row.start ? "" : " — nessuna data impostata"}`}
                           className={`flex w-full items-center truncate border-b border-neutral-800/40 px-2 text-left text-xs hover:text-neutral-100 hover:underline ${
                             outerKey === "status" ? "pl-7" : "pl-9"
                           } ${row.start ? "text-neutral-300" : "text-neutral-600"} ${bandBg}`}
                         >
-                          {row.item.title}
+                          {row.item.number != null && <span className="mr-1.5 shrink-0 text-neutral-500">#{row.item.number}</span>}
+                          <span className="min-w-0 truncate">{row.item.title}</span>
                         </button>
                       ),
                     )}
@@ -310,10 +311,11 @@ export default function ProjectGantt({ project, subGroupBy, reversed, onOpenItem
                             return (
                               <button
                                 onClick={() => onOpenItem(item)}
-                                title={`${item.title} · ${start.toLocaleDateString("it-IT")} → ${end.toLocaleDateString("it-IT")}`}
+                                title={`${item.number != null ? `#${item.number} ` : ""}${item.title} · ${start.toLocaleDateString("it-IT")} → ${end.toLocaleDateString("it-IT")}`}
                                 style={{ left, width, top: 6, height: ROW_H - 12 }}
                                 className={`absolute overflow-hidden rounded border px-1.5 text-left text-[11px] transition hover:brightness-125 ${style.bg} ${style.border} ${style.text}`}
                               >
+                                {item.number != null && <span className="mr-1 opacity-60">#{item.number}</span>}
                                 {item.title}
                               </button>
                             );

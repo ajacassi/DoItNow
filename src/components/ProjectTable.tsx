@@ -60,6 +60,7 @@ function NameCell({ item, onOpenItem }: { item: ProjectItem; onOpenItem: (item: 
 
   return (
     <div className="flex min-w-0 items-center gap-2 px-3 py-2">
+      {item.number != null && <span className="shrink-0 text-xs tabular-nums text-neutral-500">#{item.number}</span>}
       {canOpenDetail ? (
         <button onClick={() => onOpenItem(item)} className="min-w-0 truncate text-left text-sm text-neutral-100 hover:underline">
           {item.title}
