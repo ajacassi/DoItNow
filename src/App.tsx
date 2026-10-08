@@ -13,6 +13,10 @@ import {
   setLastOrg,
   getTheme,
   setTheme,
+  getDefaultProject,
+  setDefaultProject,
+  clearDefaultProject,
+  type DefaultProject,
   type ThemeName,
 } from "./lib/store";
 import {
@@ -47,6 +51,11 @@ export default function App() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [notificationsRefreshKey, setNotificationsRefreshKey] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
+  const [defaultProject, setDefaultProjectState] = useState<DefaultProject | null>(null);
+  // Title of the default project while it's being opened at startup, and the
+  // explanation shown in the picker when that didn't work out.
+  const [startupTitle, setStartupTitle] = useState<string | null>(null);
+  const [startupNotice, setStartupNotice] = useState<string | null>(null);
 
   useEffect(() => {
     getTheme().then((t) => {
@@ -72,6 +81,33 @@ export default function App() {
         setScreen({ name: "token" });
         return;
       }
+      const def = await getDefaultProject();
+      setDefaultProjectState(def);
+      if (def) {
+        // Straight into the default project; the picker is only the fallback
+        // (and the way back), so a project that vanished can never lock us out.
+        setOrg(def.org);
+        setStartupTitle(def.title);
+        try {
+          const detail = await fetchProjectDetail(t, def.org, def.number);
+          setSelectedNumber(def.number);
+          setScreen({ name: "board", project: detail });
+          void fetchProjectsForOrg(t, def.org); // so "← Progetti" has its list ready
+          return;
+        } catch (e) {
+          setScreen({ name: "picker" });
+          const list = await fetchProjectsForOrg(t, def.org);
+          const gone = list !== null && !list.some((p) => p.number === def.number);
+          setStartupNotice(
+            gone
+              ? `Il progetto predefinito «${def.title}» (#${def.number}) non risulta più tra i progetti di ${def.org}: è stato eliminato o non è più accessibile.`
+              : `Non sono riuscito ad aprire il progetto predefinito «${def.title}» (#${def.number}): ${e instanceof Error ? e.message : "errore sconosciuto"}.`,
+          );
+          return;
+        } finally {
+          setStartupTitle(null);
+        }
+      }
       setScreen({ name: "picker" });
       const savedOrg = await getLastOrg();
       if (savedOrg) {
@@ -94,16 +130,19 @@ export default function App() {
     setScreen({ name: "picker" });
   }
 
-  async function fetchProjectsForOrg(t: string, orgName: string) {
+  /** Returns the fetched list, or null if it couldn't be loaded. */
+  async function fetchProjectsForOrg(t: string, orgName: string): Promise<ProjectSummary[] | null> {
     setPickerLoading(true);
     setPickerError(null);
     try {
       const result = await fetchOrgProjects(t, orgName);
       setProjects(result);
       await setLastOrg(orgName);
+      return result;
     } catch (e) {
       setPickerError(e instanceof Error ? e.message : "Errore sconosciuto");
       setProjects([]);
+      return null;
     } finally {
       setPickerLoading(false);
     }
@@ -127,6 +166,25 @@ export default function App() {
     } finally {
       setPickerLoading(false);
     }
+  }
+
+  async function toggleDefaultProject(p: ProjectSummary) {
+    const orgName = org.trim();
+    setStartupNotice(null);
+    if (defaultProject && defaultProject.org === orgName && defaultProject.number === p.number) {
+      await clearDefaultProject();
+      setDefaultProjectState(null);
+      return;
+    }
+    const next: DefaultProject = { org: orgName, number: p.number, title: p.title };
+    await setDefaultProject(next);
+    setDefaultProjectState(next);
+  }
+
+  async function removeDefaultProject() {
+    await clearDefaultProject();
+    setDefaultProjectState(null);
+    setStartupNotice(null);
   }
 
   async function refreshBoard() {
@@ -189,7 +247,11 @@ export default function App() {
 
   let content: React.ReactNode;
   if (screen.name === "loading") {
-    content = <div className="h-screen w-screen bg-neutral-950" />;
+    content = (
+      <div className="flex h-screen w-screen items-center justify-center bg-neutral-950 text-sm text-neutral-500">
+        {startupTitle ? `Apro «${startupTitle}»…` : null}
+      </div>
+    );
   } else if (screen.name === "token") {
     content = <TokenScreen onSubmit={handleTokenSubmit} error={tokenError} />;
   } else if (screen.name === "board") {
@@ -220,6 +282,11 @@ export default function App() {
         error={pickerError}
         onSelect={openProject}
         onLogout={handleLogout}
+        defaultProject={defaultProject && defaultProject.org === org.trim() ? defaultProject : null}
+        onToggleDefault={toggleDefaultProject}
+        startupNotice={startupNotice}
+        onRemoveDefault={removeDefaultProject}
+        onDismissNotice={() => setStartupNotice(null)}
       />
     );
   }

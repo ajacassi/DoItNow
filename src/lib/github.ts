@@ -836,6 +836,58 @@ export interface SubIssueSummary {
   repositoryOwner: string;
 }
 
+/** One sub-issue as listed under its parent in the table — any repo, project member or not. */
+export interface SubIssueRow extends SubIssueSummary {
+  assignees: ProjectItemUser[];
+  /** How many sub-issues this one has itself (sub-issues nest). */
+  subIssuesTotal: number;
+}
+
+const SUB_ISSUE_ROWS_QUERY = `
+  query SubIssueRows($id: ID!) {
+    node(id: $id) {
+      ... on Issue {
+        subIssues(first: 100) {
+          nodes {
+            id
+            number
+            title
+            state
+            url
+            repository { name owner { login } }
+            assignees(first: 5) { nodes { login avatarUrl } }
+            subIssuesSummary { total }
+          }
+        }
+      }
+    }
+  }
+`;
+
+/** Every sub-issue of an issue, straight from the issue itself — so, like its detail panel, regardless of which repo they live in. */
+export async function fetchSubIssueRows(token: string, issueId: string): Promise<SubIssueRow[]> {
+  const data = await graphql<{
+    node: {
+      subIssues?: {
+        nodes: Array<
+          RawSubIssue & { assignees: { nodes: ProjectItemUser[] }; subIssuesSummary: { total: number } | null }
+        >;
+      };
+    } | null;
+  }>(token, SUB_ISSUE_ROWS_QUERY, { id: issueId });
+  return (data.node?.subIssues?.nodes ?? []).map((s) => ({
+    id: s.id,
+    number: s.number,
+    title: s.title,
+    state: s.state,
+    url: s.url,
+    repository: s.repository.name,
+    repositoryOwner: s.repository.owner.login,
+    assignees: s.assignees.nodes,
+    subIssuesTotal: s.subIssuesSummary?.total ?? 0,
+  }));
+}
+
 export interface IssueProjectLink {
   /** ProjectV2Item id — needed to unlink this issue from that project. */
   itemId: string;

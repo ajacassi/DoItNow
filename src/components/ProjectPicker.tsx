@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import type { ProjectSummary } from "../lib/github";
-import { getShowClosedProjects, setShowClosedProjects } from "../lib/store";
+import { getShowClosedProjects, setShowClosedProjects, type DefaultProject } from "../lib/store";
 
 interface Props {
   org: string;
@@ -12,6 +12,13 @@ interface Props {
   error: string | null;
   onSelect: (project: ProjectSummary) => void;
   onLogout: () => void;
+  /** The default project of the org currently shown, if any. */
+  defaultProject: DefaultProject | null;
+  onToggleDefault: (project: ProjectSummary) => void;
+  /** Why the default project could not be opened at startup, if it could not. */
+  startupNotice: string | null;
+  onRemoveDefault: () => void;
+  onDismissNotice: () => void;
 }
 
 export default function ProjectPicker({
@@ -23,6 +30,11 @@ export default function ProjectPicker({
   error,
   onSelect,
   onLogout,
+  defaultProject,
+  onToggleDefault,
+  startupNotice,
+  onRemoveDefault,
+  onDismissNotice,
 }: Props) {
   const [touched, setTouched] = useState(false);
   // Once we already have a remembered/fetched org, show a compact summary
@@ -103,6 +115,20 @@ export default function ProjectPicker({
           </div>
         )}
 
+        {startupNotice && (
+          <div className="mt-4 rounded-lg border border-amber-700/60 bg-amber-950/30 px-3 py-2.5 text-xs text-amber-200">
+            <p>{startupNotice}</p>
+            <div className="mt-2 flex gap-3">
+              <button onClick={onRemoveDefault} className="font-medium underline hover:text-amber-100">
+                Rimuovi il predefinito
+              </button>
+              <button onClick={onDismissNotice} className="text-amber-300/70 hover:text-amber-100">
+                Tienilo e chiudi
+              </button>
+            </div>
+          </div>
+        )}
+
         {touched && !org.trim() && (
           <p className="mt-2 text-xs text-red-400">Inserisci il nome dell'organizzazione.</p>
         )}
@@ -124,10 +150,10 @@ export default function ProjectPicker({
         {visibleProjects.length > 0 && (
           <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {visibleProjects.map((p) => (
-              <li key={p.id}>
+              <li key={p.id} className="relative">
                 <button
                   onClick={() => onSelect(p)}
-                  className="w-full rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 text-left transition hover:border-indigo-500/60 hover:bg-neutral-900"
+                  className="w-full rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 pb-9 text-left transition hover:border-indigo-500/60 hover:bg-neutral-900"
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-medium">{p.title}</span>
@@ -141,6 +167,19 @@ export default function ProjectPicker({
                       Chiuso
                     </span>
                   )}
+                </button>
+                <button
+                  onClick={() => onToggleDefault(p)}
+                  title={
+                    defaultProject?.number === p.number
+                      ? "Progetto predefinito: si apre da solo all'avvio — clicca per toglierlo"
+                      : "Apri questo progetto direttamente all'avvio"
+                  }
+                  className={`absolute bottom-2.5 right-3 text-xs transition ${
+                    defaultProject?.number === p.number ? "text-amber-400 hover:text-amber-300" : "text-neutral-600 hover:text-neutral-300"
+                  }`}
+                >
+                  {defaultProject?.number === p.number ? "★ Predefinito" : "☆ Apri all'avvio"}
                 </button>
               </li>
             ))}

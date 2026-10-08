@@ -47,6 +47,34 @@ export async function setLastOrg(org: string): Promise<void> {
   await store.save();
 }
 
+/** The project to open straight away at startup, skipping the picker. `title` is only for messages. */
+export interface DefaultProject {
+  org: string;
+  number: number;
+  title: string;
+}
+
+const DEFAULT_PROJECT_KEY = "default_project";
+
+export async function getDefaultProject(): Promise<DefaultProject | null> {
+  const store = await getStore();
+  const data = await store.get<DefaultProject>(DEFAULT_PROJECT_KEY);
+  if (!data || typeof data.org !== "string" || typeof data.number !== "number") return null;
+  return data;
+}
+
+export async function setDefaultProject(project: DefaultProject): Promise<void> {
+  const store = await getStore();
+  await store.set(DEFAULT_PROJECT_KEY, project);
+  await store.save();
+}
+
+export async function clearDefaultProject(): Promise<void> {
+  const store = await getStore();
+  await store.delete(DEFAULT_PROJECT_KEY);
+  await store.save();
+}
+
 export interface LabelFolders {
   /** Ordered folder names. */
   folders: string[];

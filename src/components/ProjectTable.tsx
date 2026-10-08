@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { ProjectDetail, ProjectField, ProjectItem, ItemFieldValue } from "../lib/github";
-import { groupItemsBy, visibleGroupEntries, groupColor } from "../lib/github";
+import type { ProjectDetail, ProjectField, ProjectItem, ItemFieldValue, IssueRef, SubIssueRow } from "../lib/github";
+import { groupItemsBy, visibleGroupEntries, groupColor, fetchSubIssueRows } from "../lib/github";
 import { colorStyle } from "../lib/colors";
 import {
   ASSIGNEE_COLUMN,
@@ -17,6 +17,7 @@ import ExternalLink from "./ExternalLink";
 import LabelChip from "./LabelChip";
 
 interface Props {
+  token: string;
   project: ProjectDetail;
   columns: string[];
   /** Optional secondary subdivision within each status group ("none", "assignee", "label", or `field:<name>`). */
@@ -24,6 +25,8 @@ interface Props {
   reversed: boolean;
   sortKeys: SortKey[];
   onOpenItem: (item: ProjectItem) => void;
+  /** Open an issue that isn't necessarily a row of this project (e.g. a sub-issue from another repo). */
+  onOpenIssue: (ref: IssueRef) => void;
   onNewIssueForStatus: (statusOptionId: string) => void;
   onMoveItem: (itemId: string, statusOptionId: string, statusName: string) => void;
 }
@@ -63,11 +66,31 @@ function isOverdue(iso: string): boolean {
   return new Date(iso).getTime() < Date.now();
 }
 
-function NameCell({ item, onOpenItem }: { item: ProjectItem; onOpenItem: (item: ProjectItem) => void }) {
+function NameCell({
+  item,
+  onOpenItem,
+  expanded,
+  onToggleExpand,
+}: {
+  item: ProjectItem;
+  onOpenItem: (item: ProjectItem) => void;
+  expanded: boolean;
+  onToggleExpand: () => void;
+}) {
   const canOpenDetail = item.contentType === "Issue";
+  const hasSubIssues = canOpenDetail && !!item.contentId && (item.subIssuesSummary?.total ?? 0) > 0;
 
   return (
     <div className="flex min-w-0 items-center gap-2 px-3 py-2">
+      {hasSubIssues ? (
+        <button
+          onClick={onToggleExpand}
+          title={expanded ? "Nascondi le sub-issue" : "Mostra le sub-issue"}
+          className="-ml-1 shrink-0 rounded p-0.5 hover:bg-neutral-800"
+        >
+          <ChevronIcon open={expanded} />
+        </button>
+      ) : null}
       {item.number != null && <span className="shrink-0 text-xs tabular-nums text-neutral-500">#{item.number}</span>}
       {canOpenDetail ? (
         <button onClick={() => onOpenItem(item)} className="min-w-0 truncate text-left text-sm text-neutral-100 hover:underline">
@@ -167,12 +190,14 @@ function FieldCell({ field, value }: { field: ProjectField; value: ItemFieldValu
 }
 
 export default function ProjectTable({
+  token,
   project,
   columns: visibleColumns,
   subGroupBy,
   reversed,
   sortKeys,
   onOpenItem,
+  onOpenIssue,
   onNewIssueForStatus,
   onMoveItem,
 }: Props) {
@@ -189,6 +214,110 @@ export default function ProjectTable({
   const optionId = outerKey === "status" ? new Map(project.statusOptions.map((o) => [o.name, o.id])) : new Map<string, string>();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
+
+  // Sub-issues listed under their parent: expanded parents (by issue node id)
+  // and what was fetched for them. State lives here, not in ItemsGrid, since
+  // that's re-created on every render. A parent whose sub-issue count has
+  // changed since the last fetch (e.g. after a refresh) is re-fetched on re-open.
+  type SubState = { total: number; status: "loading" | "ok" | "error"; rows: SubIssueRow[]; error?: string };
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [subIssues, setSubIssues] = useState<Record<string, SubState>>({});
+
+  function toggleSubIssues(issueId: string, total: number) {
+    const opening = !expandedIds.has(issueId);
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (opening) next.add(issueId);
+      else next.delete(issueId);
+      return next;
+    });
+    const cached = subIssues[issueId];
+    if (!opening || (cached && cached.status !== "error" && cached.total === total)) return;
+    setSubIssues((s) => ({ ...s, [issueId]: { total, status: "loading", rows: [] } }));
+    fetchSubIssueRows(token, issueId)
+      .then((rows) => setSubIssues((s) => ({ ...s, [issueId]: { total, status: "ok", rows } })))
+      .catch((e) =>
+        setSubIssues((s) => ({
+          ...s,
+          [issueId]: { total, status: "error", rows: [], error: e instanceof Error ? e.message : "Caricamento non riuscito." },
+        })),
+      );
+  }
+
+  function renderSubIssues(parentId: string, depth: number): React.ReactNode {
+    if (!expandedIds.has(parentId)) return null;
+    const state = subIssues[parentId];
+    const indent = { paddingLeft: 12 + depth * 22 };
+    if (!state || state.status === "loading") {
+      return (
+        <div className="border-b border-neutral-800/60 bg-neutral-900/30 py-1.5 text-xs text-neutral-600" style={indent}>
+          Carico le sub-issue…
+        </div>
+      );
+    }
+    if (state.status === "error") {
+      return (
+        <div className="border-b border-neutral-800/60 bg-neutral-900/30 py-1.5 text-xs text-red-400" style={indent}>
+          {state.error}
+        </div>
+      );
+    }
+    return state.rows.map((row) => (
+      <div key={row.id}>
+        <div
+          className="grid items-center border-b border-neutral-800/60 bg-neutral-900/30 hover:bg-neutral-900/60"
+          style={{ gridTemplateColumns }}
+        >
+          <div className="flex min-w-0 items-center gap-2 py-1.5 pr-3" style={indent}>
+            {row.subIssuesTotal > 0 ? (
+              <button
+                onClick={() => toggleSubIssues(row.id, row.subIssuesTotal)}
+                title={expandedIds.has(row.id) ? "Nascondi le sub-issue" : "Mostra le sub-issue"}
+                className="-ml-1 shrink-0 rounded p-0.5 hover:bg-neutral-800"
+              >
+                <ChevronIcon open={expandedIds.has(row.id)} />
+              </button>
+            ) : (
+              <span className="w-[18px] shrink-0" />
+            )}
+            <span className="shrink-0 text-xs tabular-nums text-neutral-500">#{row.number}</span>
+            <button
+              onClick={() => onOpenIssue({ repositoryOwner: row.repositoryOwner, repository: row.repository, number: row.number })}
+              className={`min-w-0 truncate text-left text-sm hover:underline ${row.state === "CLOSED" ? "text-neutral-500 line-through" : "text-neutral-200"}`}
+            >
+              {row.title}
+            </button>
+            <span className="shrink-0 truncate text-[11px] text-neutral-600" title={`${row.repositoryOwner}/${row.repository}`}>
+              {row.repository}
+            </span>
+            <ExternalLink href={row.url} className="shrink-0 text-xs text-neutral-600 hover:text-neutral-400">
+              ↗
+            </ExternalLink>
+          </div>
+          {visibleColumns.map((key) => (
+            <div key={key} className="min-w-0 px-3 py-1.5">
+              {key === ASSIGNEE_COLUMN ? (
+                row.assignees.length === 0 ? (
+                  <span className="text-neutral-700">—</span>
+                ) : (
+                  <div className="flex -space-x-1.5">
+                    {row.assignees.map((a) => (
+                      <img key={a.login} src={a.avatarUrl} title={a.login} alt={a.login} className="h-5 w-5 rounded-full border border-neutral-900" />
+                    ))}
+                  </div>
+                )
+              ) : key === REPOSITORY_COLUMN ? (
+                <span className="block truncate text-xs text-neutral-300" title={`${row.repositoryOwner}/${row.repository}`}>
+                  {row.repository}
+                </span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+        {renderSubIssues(row.id, depth + 1)}
+      </div>
+    ));
+  }
 
   const fieldByName = new Map(project.fields.map((f) => [f.name, f]));
   const columnLabel = new Map(availableColumns(project).map((o) => [o.key, o.label]));
@@ -210,8 +339,8 @@ export default function ProjectTable({
           ))}
         </div>
         {items.map((item) => (
+          <div key={item.id}>
           <div
-            key={item.id}
             draggable
             onDragStart={(e) => {
               e.dataTransfer.setData(DRAG_MIME, item.id);
@@ -220,7 +349,12 @@ export default function ProjectTable({
             className="grid cursor-grab items-center border-b border-neutral-800/60 last:border-b-0 hover:bg-neutral-900/40 active:cursor-grabbing"
             style={{ gridTemplateColumns }}
           >
-            <NameCell item={item} onOpenItem={onOpenItem} />
+            <NameCell
+              item={item}
+              onOpenItem={onOpenItem}
+              expanded={!!item.contentId && expandedIds.has(item.contentId)}
+              onToggleExpand={() => item.contentId && toggleSubIssues(item.contentId, item.subIssuesSummary?.total ?? 0)}
+            />
             {visibleColumns.map((key) => (
               <div key={key} className="min-w-0 px-3 py-2">
                 {key === ASSIGNEE_COLUMN ? (
@@ -240,6 +374,8 @@ export default function ProjectTable({
                 ) : null}
               </div>
             ))}
+          </div>
+          {item.contentId && renderSubIssues(item.contentId, 1)}
           </div>
         ))}
       </div>

@@ -492,12 +492,14 @@ export default function ProjectView({
         <main className="min-h-0 min-w-0 flex-1">
           {view === "table" ? (
             <ProjectTable
+              token={token}
               project={visibleProject}
               columns={orderColumns(project, visibleColumns)}
               subGroupBy={subGroupBy}
               reversed={statusOrderReversed}
               sortKeys={sortKeys}
               onOpenItem={openItemDetail}
+              onOpenIssue={setOpenIssueRef}
               onNewIssueForStatus={openNewIssue}
               onMoveItem={moveItemToStatus}
             />
