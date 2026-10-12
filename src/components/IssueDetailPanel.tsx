@@ -29,6 +29,7 @@ import {
   type IssueRef,
   type RepoLabel,
   type StatusOption,
+  type SubIssueSummary,
 } from "../lib/github";
 import { colorStyle } from "../lib/colors";
 import { realProjectFields } from "../lib/columns";
@@ -238,6 +239,19 @@ export default function IssueDetailPanel({
       const nextLabels = (detail?.labels ?? []).filter((l) => l.id !== labelId);
       onItemChange(projectItem.id, { labels: nextLabels.map((l) => ({ name: l.name, color: l.color })) });
     }
+  }
+
+  /** This issue as it appears in other issues' blockedBy/blocking lists. */
+  function selfSummary(): SubIssueSummary {
+    return {
+      id: detail!.id,
+      number: detail!.number,
+      title: detail!.title,
+      state: detail!.state,
+      url: detail!.url,
+      repository: issueRef.repository,
+      repositoryOwner: issueRef.repositoryOwner,
+    };
   }
 
   async function changeStatus(optionId: string) {
@@ -731,23 +745,37 @@ export default function IssueDetailPanel({
               blockedBy={detail.blockedBy}
               blocking={detail.blocking}
               onBlockedByChange={(next) => {
+                // Both sides of the relationship change: this issue's blockedBy,
+                // and the blockers' "blocking" — patch whichever of them happen
+                // to be rows in this project so the table stays in step.
+                const added = next.filter((s) => !detail.blockedBy.some((b) => b.id === s.id));
+                const removed = detail.blockedBy.filter((b) => !next.some((s) => s.id === b.id));
                 setDetail({ ...detail, blockedBy: next });
-                if (projectItem) onItemChange(projectItem.id, { blockedByIds: next.map((s) => s.id) });
+                if (projectItem) onItemChange(projectItem.id, { blockedBy: next });
+                for (const blocker of added) {
+                  const blockerItem = project.items.find((it) => it.contentId === blocker.id);
+                  if (blockerItem) onItemChange(blockerItem.id, { blocking: [...blockerItem.blocking, selfSummary()] });
+                }
+                for (const blocker of removed) {
+                  const blockerItem = project.items.find((it) => it.contentId === blocker.id);
+                  if (blockerItem) onItemChange(blockerItem.id, { blocking: blockerItem.blocking.filter((b) => b.id !== detail.id) });
+                }
               }}
               onBlockingChange={(next) => {
-                // "Blocca" is the inverse relationship: it's the OTHER issue's
-                // blockedByIds that changes here, not this one's — patch whichever
-                // side actually differs, if that issue happens to be a row in this project.
+                // "Blocca" is the inverse relationship: besides this issue's own
+                // blocking, it's the OTHER issue's blockedBy that changes — patch
+                // whichever side actually differs, if that issue is a row in this project.
                 const added = next.filter((s) => !detail.blocking.some((b) => b.id === s.id));
                 const removed = detail.blocking.filter((b) => !next.some((s) => s.id === b.id));
                 setDetail({ ...detail, blocking: next });
+                if (projectItem) onItemChange(projectItem.id, { blocking: next });
                 for (const target of added) {
                   const targetItem = project.items.find((it) => it.contentId === target.id);
-                  if (targetItem) onItemChange(targetItem.id, { blockedByIds: [...targetItem.blockedByIds, detail.id] });
+                  if (targetItem) onItemChange(targetItem.id, { blockedBy: [...targetItem.blockedBy, selfSummary()] });
                 }
                 for (const target of removed) {
                   const targetItem = project.items.find((it) => it.contentId === target.id);
-                  if (targetItem) onItemChange(targetItem.id, { blockedByIds: targetItem.blockedByIds.filter((id) => id !== detail.id) });
+                  if (targetItem) onItemChange(targetItem.id, { blockedBy: targetItem.blockedBy.filter((b) => b.id !== detail.id) });
                 }
               }}
               onOpenIssue={onOpenIssue}

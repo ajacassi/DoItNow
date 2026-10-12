@@ -302,7 +302,15 @@ export default function App() {
       >
         ⚙️
       </button>
-      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <SettingsPanel
+          onClose={() => setShowSettings(false)}
+          token={token}
+          org={org.trim()}
+          projects={projects}
+          preferredProjectNumber={selectedNumber ?? defaultProject?.number ?? null}
+        />
+      )}
       {showNotifications && token && (
         <NotificationsInbox
           token={token}

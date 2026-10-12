@@ -9,23 +9,93 @@ export class GithubApiError extends Error {
   }
 }
 
+// ---------------------------------------------------------------------------
+// On-demand API usage measurement (Settings > Diagnostica API). While a
+// measurement is running, every GraphQL query gets GitHub's `rateLimit` field
+// injected and its cost / node count / size / time recorded, then stripped
+// from the result — so the very same call paths as in normal use are measured,
+// and nothing changes outside a measurement.
+// ---------------------------------------------------------------------------
+
+export interface ApiCallStat {
+  name: string;
+  /** Rate-limit points this call consumed. */
+  cost: number;
+  nodeCount: number;
+  bytes: number;
+  ms: number;
+}
+
+export interface ApiMeasurement {
+  calls: ApiCallStat[];
+  /** From the last response: points left in the current hour window, the window's total, and when it resets. */
+  remaining: number | null;
+  limit: number | null;
+  resetAt: string | null;
+}
+
+let activeMeter: ApiMeasurement | null = null;
+
+/** Runs `fn` and reports what its GraphQL calls cost. Not reentrant. */
+export async function measureApiUsage(fn: () => Promise<unknown>): Promise<ApiMeasurement> {
+  const meter: ApiMeasurement = { calls: [], remaining: null, limit: null, resetAt: null };
+  activeMeter = meter;
+  try {
+    await fn();
+  } finally {
+    activeMeter = null;
+  }
+  return meter;
+}
+
+function withRateLimitField(query: string): string {
+  if (/^\s*mutation\b/.test(query)) return query;
+  const open = query.indexOf("{");
+  if (open === -1) return query;
+  return `${query.slice(0, open + 1)} rateLimit { cost nodeCount remaining limit resetAt } ${query.slice(open + 1)}`;
+}
+
 async function graphql<T>(token: string, query: string, variables: Record<string, unknown>): Promise<T> {
+  const meter = activeMeter;
+  const started = meter ? performance.now() : 0;
   const res = await fetch(GRAPHQL_ENDPOINT, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ query, variables }),
+    body: JSON.stringify({ query: meter ? withRateLimitField(query) : query, variables }),
   });
 
   if (!res.ok) {
     throw new GithubApiError(`GitHub API ha risposto ${res.status}`, res.status);
   }
 
-  const json = await res.json();
+  let json;
+  let bytes = 0;
+  if (meter) {
+    const text = await res.text();
+    bytes = new TextEncoder().encode(text).length;
+    json = JSON.parse(text);
+  } else {
+    json = await res.json();
+  }
   if (json.errors?.length) {
     throw new GithubApiError(json.errors.map((e: { message: string }) => e.message).join("; "));
+  }
+  if (meter && json.data?.rateLimit) {
+    const rl = json.data.rateLimit as { cost: number; nodeCount: number; remaining: number; limit: number; resetAt: string };
+    meter.calls.push({
+      name: /\b(?:query|mutation)\s+(\w+)/.exec(query)?.[1] ?? "query",
+      cost: rl.cost,
+      nodeCount: rl.nodeCount,
+      bytes,
+      ms: Math.round(performance.now() - started),
+    });
+    meter.remaining = rl.remaining;
+    meter.limit = rl.limit;
+    meter.resetAt = rl.resetAt;
+    delete json.data.rateLimit;
   }
   return json.data as T;
 }
@@ -146,8 +216,10 @@ export interface ProjectItem {
   /** Node id of the parent issue, if this item is itself a sub-issue. */
   parentId: string | null;
   subIssuesSummary: SubIssuesSummary | null;
-  /** Content ids of issues that block this one — only populated for the ones also present in this project, for drawing Gantt dependency arrows without extra calls. */
-  blockedByIds: string[];
+  /** Issues that block this one (any repo, open or closed) — also what the Gantt arrows are drawn from. */
+  blockedBy: SubIssueSummary[];
+  /** Issues this one blocks (any repo, open or closed). */
+  blocking: SubIssueSummary[];
   status: string;
   contentType: "Issue" | "PullRequest" | "DraftIssue";
   number: number | null;
@@ -263,7 +335,12 @@ const PROJECT_ITEM_FRAGMENT = `
         parent { id }
         issueType { name color }
         subIssuesSummary { total completed percentCompleted }
-        blockedBy(first: 10) { nodes { id } }
+        blockedBy(first: 50) {
+          nodes { id number title state url repository { name owner { login } } }
+        }
+        blocking(first: 50) {
+          nodes { id number title state url repository { name owner { login } } }
+        }
         repository { name owner { login } }
         assignees(first: 6) { nodes { login avatarUrl } }
         labels(first: 10) { nodes { name color } }
@@ -426,7 +503,8 @@ interface RawProjectItemNode {
     parent?: { id: string } | null;
     issueType?: { name: string; color: string } | null;
     subIssuesSummary?: SubIssuesSummary | null;
-    blockedBy?: { nodes: Array<{ id: string }> };
+    blockedBy?: { nodes: RawSubIssue[] };
+    blocking?: { nodes: RawSubIssue[] };
     repository?: { name: string; owner: { login: string } };
     assignees?: { nodes: ProjectItemUser[] };
     labels?: { nodes: ProjectItemLabel[] };
@@ -619,7 +697,8 @@ export async function fetchProjectDetail(token: string, org: string, number: num
         contentId: content.id ?? null,
         parentId: content.parent?.id ?? null,
         subIssuesSummary: content.subIssuesSummary ?? null,
-        blockedByIds: content.blockedBy?.nodes.map((b) => b.id) ?? [],
+        blockedBy: (content.blockedBy?.nodes ?? []).map(toSubIssueSummary),
+        blocking: (content.blocking?.nodes ?? []).map(toSubIssueSummary),
         status,
         contentType: content.__typename,
         number: content.number ?? null,
@@ -997,6 +1076,32 @@ interface RawSubIssue {
   state: string;
   url: string;
   repository: { name: string; owner: { login: string } };
+}
+
+function toSubIssueSummary(s: RawSubIssue): SubIssueSummary {
+  return {
+    id: s.id,
+    number: s.number,
+    title: s.title,
+    state: s.state,
+    url: s.url,
+    repository: s.repository.name,
+    repositoryOwner: s.repository.owner.login,
+  };
+}
+
+/**
+ * Open issues that currently hold this one up — as on GitHub, a closed
+ * blocker no longer blocks anything.
+ */
+export function activeBlockers(item: ProjectItem): SubIssueSummary[] {
+  return item.blockedBy.filter((b) => b.state === "OPEN");
+}
+
+/** Open issues this one is currently holding up — none if this issue is itself closed/merged. */
+export function activeBlocking(item: ProjectItem): SubIssueSummary[] {
+  if (item.state && item.state !== "OPEN") return [];
+  return item.blocking.filter((b) => b.state === "OPEN");
 }
 
 interface RawIssueDetailResponse {

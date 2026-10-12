@@ -6,11 +6,15 @@ export const CREATED_COLUMN = "created";
 export const UPDATED_COLUMN = "updated";
 export const CLOSED_COLUMN = "closed";
 export const REPOSITORY_COLUMN = "repository";
+export const BLOCKED_BY_COLUMN = "blockedBy";
+export const BLOCKING_COLUMN = "blocking";
 
 const BUILT_IN_COLUMNS = [
   { key: ASSIGNEE_COLUMN, label: "Assegnatario" },
   { key: AUTHOR_COLUMN, label: "Autore" },
   { key: REPOSITORY_COLUMN, label: "Repository" },
+  { key: BLOCKED_BY_COLUMN, label: "Bloccata da" },
+  { key: BLOCKING_COLUMN, label: "Blocca" },
   { key: CREATED_COLUMN, label: "Creato il" },
   { key: UPDATED_COLUMN, label: "Aggiornato il" },
   { key: CLOSED_COLUMN, label: "Chiuso il" },

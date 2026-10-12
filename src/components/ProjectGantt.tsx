@@ -142,7 +142,7 @@ export default function ProjectGantt({ project, subGroupBy, reversed, onOpenItem
   }
 
   // Bar position of every row that has one, keyed by content id — built from
-  // data already in this project's bulk fetch (item.blockedByIds), so drawing
+  // data already in this project's bulk fetch (item.blockedBy), so drawing
   // dependency arrows costs zero extra network calls.
   const barByContentId = new Map<string, { top: number; left: number; width: number }>();
   const rowsByStatus = new Map<string, GanttRow[]>();
@@ -166,11 +166,11 @@ export default function ProjectGantt({ project, subGroupBy, reversed, onOpenItem
   const connectors: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
   for (const [, rows] of rangesByStatus) {
     for (const { item } of rows) {
-      if (!item.contentId || item.blockedByIds.length === 0) continue;
+      if (!item.contentId || item.blockedBy.length === 0) continue;
       const to = barByContentId.get(item.contentId);
       if (!to) continue;
-      for (const blockerId of item.blockedByIds) {
-        const from = barByContentId.get(blockerId);
+      for (const blocker of item.blockedBy) {
+        const from = barByContentId.get(blocker.id);
         if (!from) continue; // blocker not visible in this Gantt (no dates, collapsed, or not in this project)
         connectors.push({ x1: from.left + from.width, y1: from.top, x2: to.left, y2: to.top });
       }

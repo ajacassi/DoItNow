@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { ProjectDetail, ProjectField, ProjectItem, ItemFieldValue, IssueRef, SubIssueRow } from "../lib/github";
-import { groupItemsBy, visibleGroupEntries, groupColor, fetchSubIssueRows } from "../lib/github";
+import type { ProjectDetail, ProjectField, ProjectItem, ItemFieldValue, IssueRef, SubIssueRow, SubIssueSummary } from "../lib/github";
+import { groupItemsBy, visibleGroupEntries, groupColor, fetchSubIssueRows, activeBlockers, activeBlocking } from "../lib/github";
 import { colorStyle } from "../lib/colors";
 import {
   ASSIGNEE_COLUMN,
@@ -9,6 +9,8 @@ import {
   UPDATED_COLUMN,
   CLOSED_COLUMN,
   REPOSITORY_COLUMN,
+  BLOCKED_BY_COLUMN,
+  BLOCKING_COLUMN,
   availableColumns,
 } from "../lib/columns";
 import { sortItems, type SortKey } from "../lib/sort";
@@ -66,16 +68,132 @@ function isOverdue(iso: string): boolean {
   return new Date(iso).getTime() < Date.now();
 }
 
+/** "No entry" sign — this issue is held up by others. */
+function NoEntryIcon({ className }: { className: string }) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <circle cx="10" cy="10" r="7.5" />
+      <path d="M5.5 10h9" />
+    </svg>
+  );
+}
+
+/** Warning triangle with an exclamation mark — this issue is holding others up. */
+function WarningIcon({ className }: { className: string }) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 2.5l8 14H2l8-14z" />
+      <path d="M10 8v4" />
+      <circle cx="10" cy="14.2" r="0.6" fill="currentColor" />
+    </svg>
+  );
+}
+
+function relationTitle(label: string, list: SubIssueSummary[]): string {
+  return `${label}: ${list.map((b) => `#${b.number} ${b.title} (${b.repository})`).join(", ")}`;
+}
+
+/** "Bloccata da N" / "Blocca N" — only counts issues that are still open, as on GitHub. Click to unfold the details under the row. */
+function RelationBadges({ item, open, onToggle }: { item: ProjectItem; open: boolean; onToggle: () => void }) {
+  const blockers = activeBlockers(item);
+  const blocking = activeBlocking(item);
+  if (blockers.length === 0 && blocking.length === 0) return null;
+  const title = [
+    blockers.length > 0 ? relationTitle("Bloccata da", blockers) : null,
+    blocking.length > 0 ? relationTitle("Blocca", blocking) : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return (
+    <button
+      onClick={onToggle}
+      title={`${title}\n(clicca per ${open ? "nascondere" : "vedere"} il dettaglio)`}
+      className={`flex shrink-0 items-center gap-1 rounded-full text-[10px] font-medium ${open ? "ring-1 ring-neutral-600" : ""}`}
+    >
+      {blockers.length > 0 && (
+        <span className="inline-flex items-center gap-1 rounded-full border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-red-400">
+          <NoEntryIcon className="h-3 w-3" />
+          Bloccata da {blockers.length}
+        </span>
+      )}
+      {blocking.length > 0 && (
+        <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-amber-400">
+          <WarningIcon className="h-3 w-3" />
+          Blocca {blocking.length}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function RelationLine({
+  label,
+  list,
+  tone,
+  onOpenIssue,
+}: {
+  label: string;
+  list: SubIssueSummary[];
+  tone: string;
+  onOpenIssue: (ref: IssueRef) => void;
+}) {
+  if (list.length === 0) return null;
+  return (
+    <div className="flex items-start gap-2">
+      <span className={`w-24 shrink-0 pt-0.5 text-[11px] font-medium ${tone}`}>{label}</span>
+      <ul className="min-w-0 flex-1 space-y-0.5">
+        {list.map((b) => (
+          <li key={b.id} className="flex min-w-0 items-center gap-2">
+            <button
+              onClick={() => onOpenIssue({ repositoryOwner: b.repositoryOwner, repository: b.repository, number: b.number })}
+              className={`min-w-0 truncate text-left text-xs hover:underline ${b.state === "CLOSED" ? "text-neutral-500 line-through" : "text-neutral-200"}`}
+            >
+              <span className="mr-1.5 tabular-nums text-neutral-500">#{b.number}</span>
+              {b.title}
+            </button>
+            <span className="shrink-0 text-[11px] text-neutral-600" title={`${b.repositoryOwner}/${b.repository}`}>
+              {b.repository}
+            </span>
+            {b.state === "CLOSED" && <span className="shrink-0 text-[10px] text-neutral-600">chiusa</span>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Column cell: every related issue as a clickable #number — open ones coloured, closed ones struck through (they no longer block). */
+function RelationCell({ list, tone, onOpenIssue }: { list: SubIssueSummary[]; tone: string; onOpenIssue: (ref: IssueRef) => void }) {
+  if (list.length === 0) return <span className="text-neutral-700">—</span>;
+  return (
+    <div className="flex flex-wrap items-center gap-x-1.5 overflow-hidden" style={{ maxHeight: 36 }} title={relationTitle("", list)}>
+      {list.map((b) => (
+        <button
+          key={b.id}
+          onClick={() => onOpenIssue({ repositoryOwner: b.repositoryOwner, repository: b.repository, number: b.number })}
+          className={`text-xs tabular-nums hover:underline ${b.state === "CLOSED" ? "text-neutral-600 line-through" : tone}`}
+        >
+          #{b.number}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function NameCell({
   item,
   onOpenItem,
   expanded,
   onToggleExpand,
+  relationsOpen,
+  onToggleRelations,
 }: {
   item: ProjectItem;
   onOpenItem: (item: ProjectItem) => void;
   expanded: boolean;
   onToggleExpand: () => void;
+  relationsOpen: boolean;
+  onToggleRelations: () => void;
 }) {
   const canOpenDetail = item.contentType === "Issue";
   const hasSubIssues = canOpenDetail && !!item.contentId && (item.subIssuesSummary?.total ?? 0) > 0;
@@ -103,6 +221,7 @@ function NameCell({
         <LabelChip key={l.name} name={l.name} color={l.color} />
       ))}
       {item.subIssuesSummary && <SubIssueProgress summary={item.subIssuesSummary} />}
+      <RelationBadges item={item} open={relationsOpen} onToggle={onToggleRelations} />
       {item.url && (
         <ExternalLink href={item.url} className="shrink-0 text-xs text-neutral-600 hover:text-neutral-400">
           ↗
@@ -222,6 +341,17 @@ export default function ProjectTable({
   type SubState = { total: number; status: "loading" | "ok" | "error"; rows: SubIssueRow[]; error?: string };
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [subIssues, setSubIssues] = useState<Record<string, SubState>>({});
+  // Rows whose blocked-by / blocking details are unfolded (by project item id).
+  const [relationsOpen, setRelationsOpen] = useState<Set<string>>(new Set());
+
+  function toggleRelations(itemId: string) {
+    setRelationsOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  }
 
   function toggleSubIssues(issueId: string, total: number) {
     const opening = !expandedIds.has(issueId);
@@ -354,6 +484,8 @@ export default function ProjectTable({
               onOpenItem={onOpenItem}
               expanded={!!item.contentId && expandedIds.has(item.contentId)}
               onToggleExpand={() => item.contentId && toggleSubIssues(item.contentId, item.subIssuesSummary?.total ?? 0)}
+              relationsOpen={relationsOpen.has(item.id)}
+              onToggleRelations={() => toggleRelations(item.id)}
             />
             {visibleColumns.map((key) => (
               <div key={key} className="min-w-0 px-3 py-2">
@@ -363,6 +495,10 @@ export default function ProjectTable({
                   <AuthorCell item={item} />
                 ) : key === REPOSITORY_COLUMN ? (
                   <RepositoryCell item={item} />
+                ) : key === BLOCKED_BY_COLUMN ? (
+                  <RelationCell list={item.blockedBy} tone="text-red-400" onOpenIssue={onOpenIssue} />
+                ) : key === BLOCKING_COLUMN ? (
+                  <RelationCell list={item.blocking} tone="text-amber-400" onOpenIssue={onOpenIssue} />
                 ) : key === CREATED_COLUMN ? (
                   <DateCell iso={item.createdAt} />
                 ) : key === UPDATED_COLUMN ? (
@@ -375,6 +511,12 @@ export default function ProjectTable({
               </div>
             ))}
           </div>
+          {relationsOpen.has(item.id) && (item.blockedBy.length > 0 || item.blocking.length > 0) && (
+            <div className="space-y-1.5 border-b border-neutral-800/60 bg-neutral-900/30 py-2 pr-3" style={{ paddingLeft: 34 }}>
+              <RelationLine label="Bloccata da" list={item.blockedBy} tone="text-red-400" onOpenIssue={onOpenIssue} />
+              <RelationLine label="Blocca" list={item.blocking} tone="text-amber-400" onOpenIssue={onOpenIssue} />
+            </div>
+          )}
           {item.contentId && renderSubIssues(item.contentId, 1)}
           </div>
         ))}

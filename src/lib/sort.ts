@@ -1,5 +1,14 @@
 import type { ItemFieldValue, ProjectDetail, ProjectItem } from "./github";
-import { ASSIGNEE_COLUMN, CREATED_COLUMN, UPDATED_COLUMN, CLOSED_COLUMN, REPOSITORY_COLUMN } from "./columns";
+import { activeBlockers, activeBlocking } from "./github";
+import {
+  ASSIGNEE_COLUMN,
+  CREATED_COLUMN,
+  UPDATED_COLUMN,
+  CLOSED_COLUMN,
+  REPOSITORY_COLUMN,
+  BLOCKED_BY_COLUMN,
+  BLOCKING_COLUMN,
+} from "./columns";
 
 export const TITLE_COLUMN = "title";
 
@@ -40,6 +49,10 @@ function sortValueFor(item: ProjectItem, project: ProjectDetail, key: string): S
       return item.assignees[0]?.login ?? null;
     case REPOSITORY_COLUMN:
       return item.repository;
+    case BLOCKED_BY_COLUMN:
+      return activeBlockers(item).length;
+    case BLOCKING_COLUMN:
+      return activeBlocking(item).length;
     case CREATED_COLUMN:
       return item.createdAt;
     case UPDATED_COLUMN:
