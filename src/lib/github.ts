@@ -920,6 +920,10 @@ export interface SubIssueRow extends SubIssueSummary {
   assignees: ProjectItemUser[];
   /** How many sub-issues this one has itself (sub-issues nest). */
   subIssuesTotal: number;
+  /** Whether this sub-issue is an item of the project being viewed. */
+  inProject: boolean;
+  /** Its Status in that project — null if it has none, or isn't in the project at all. */
+  status: string | null;
 }
 
 const SUB_ISSUE_ROWS_QUERY = `
@@ -936,6 +940,14 @@ const SUB_ISSUE_ROWS_QUERY = `
             repository { name owner { login } }
             assignees(first: 5) { nodes { login avatarUrl } }
             subIssuesSummary { total }
+            projectItems(first: 10, includeArchived: false) {
+              nodes {
+                project { id }
+                fieldValueByName(name: "${STATUS_FIELD_NAME}") {
+                  ... on ProjectV2ItemFieldSingleSelectValue { name }
+                }
+              }
+            }
           }
         }
       }
@@ -943,28 +955,41 @@ const SUB_ISSUE_ROWS_QUERY = `
   }
 `;
 
-/** Every sub-issue of an issue, straight from the issue itself — so, like its detail panel, regardless of which repo they live in. */
-export async function fetchSubIssueRows(token: string, issueId: string): Promise<SubIssueRow[]> {
+/**
+ * Every sub-issue of an issue, straight from the issue itself — so, like its
+ * detail panel, regardless of which repo they live in — each with its Status
+ * in `projectId` (the project being viewed), if it's an item of it.
+ */
+export async function fetchSubIssueRows(token: string, issueId: string, projectId: string): Promise<SubIssueRow[]> {
   const data = await graphql<{
     node: {
       subIssues?: {
         nodes: Array<
-          RawSubIssue & { assignees: { nodes: ProjectItemUser[] }; subIssuesSummary: { total: number } | null }
+          RawSubIssue & {
+            assignees: { nodes: ProjectItemUser[] };
+            subIssuesSummary: { total: number } | null;
+            projectItems: { nodes: Array<{ project: { id: string }; fieldValueByName: { name?: string } | null }> };
+          }
         >;
       };
     } | null;
   }>(token, SUB_ISSUE_ROWS_QUERY, { id: issueId });
-  return (data.node?.subIssues?.nodes ?? []).map((s) => ({
-    id: s.id,
-    number: s.number,
-    title: s.title,
-    state: s.state,
-    url: s.url,
-    repository: s.repository.name,
-    repositoryOwner: s.repository.owner.login,
-    assignees: s.assignees.nodes,
-    subIssuesTotal: s.subIssuesSummary?.total ?? 0,
-  }));
+  return (data.node?.subIssues?.nodes ?? []).map((s) => {
+    const inThisProject = s.projectItems.nodes.find((p) => p.project.id === projectId);
+    return {
+      inProject: !!inThisProject,
+      status: inThisProject?.fieldValueByName?.name ?? null,
+      id: s.id,
+      number: s.number,
+      title: s.title,
+      state: s.state,
+      url: s.url,
+      repository: s.repository.name,
+      repositoryOwner: s.repository.owner.login,
+      assignees: s.assignees.nodes,
+      subIssuesTotal: s.subIssuesSummary?.total ?? 0,
+    };
+  });
 }
 
 export interface IssueProjectLink {

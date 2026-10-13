@@ -1,6 +1,14 @@
 import { useState } from "react";
 import type { ProjectDetail, ProjectField, ProjectItem, ItemFieldValue, IssueRef, SubIssueRow, SubIssueSummary } from "../lib/github";
-import { groupItemsBy, visibleGroupEntries, groupColor, fetchSubIssueRows, activeBlockers, activeBlocking } from "../lib/github";
+import {
+  groupItemsBy,
+  visibleGroupEntries,
+  groupColor,
+  fetchSubIssueRows,
+  activeBlockers,
+  activeBlocking,
+  NO_STATUS,
+} from "../lib/github";
 import { colorStyle } from "../lib/colors";
 import {
   ASSIGNEE_COLUMN,
@@ -364,7 +372,7 @@ export default function ProjectTable({
     const cached = subIssues[issueId];
     if (!opening || (cached && cached.status !== "error" && cached.total === total)) return;
     setSubIssues((s) => ({ ...s, [issueId]: { total, status: "loading", rows: [] } }));
-    fetchSubIssueRows(token, issueId)
+    fetchSubIssueRows(token, issueId, project.id)
       .then((rows) => setSubIssues((s) => ({ ...s, [issueId]: { total, status: "ok", rows } })))
       .catch((e) =>
         setSubIssues((s) => ({
@@ -392,7 +400,18 @@ export default function ProjectTable({
         </div>
       );
     }
-    return state.rows.map((row) => (
+    // Same order as the project's statuses (honouring the "reverse" toggle);
+    // sub-issues without a status come next, those outside the project last.
+    const statusCount = project.statusOptions.length;
+    const statusIndex = new Map(project.statusOptions.map((o, i) => [o.name, i]));
+    const rank = (r: SubIssueRow) => {
+      if (!r.inProject) return statusCount + 1;
+      const i = r.status != null ? statusIndex.get(r.status) : undefined;
+      if (i === undefined) return statusCount;
+      return reversed ? statusCount - 1 - i : i;
+    };
+    const rows = [...state.rows].sort((a, b) => rank(a) - rank(b));
+    return rows.map((row) => (
       <div key={row.id}>
         <div
           className="grid items-center border-b border-neutral-800/60 bg-neutral-900/30 hover:bg-neutral-900/60"
@@ -417,6 +436,28 @@ export default function ProjectTable({
             >
               {row.title}
             </button>
+            {row.inProject ? (
+              (() => {
+                const name = row.status ?? NO_STATUS;
+                const style = colorStyle(groupColor(project, "status", name));
+                return (
+                  <span
+                    className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${style.bg} ${style.text} ${style.border}`}
+                    title={`Stato nel progetto: ${name}`}
+                  >
+                    <span className={`h-1 w-1 rounded-full ${style.dot}`} />
+                    {name}
+                  </span>
+                );
+              })()
+            ) : (
+              <span
+                className="shrink-0 rounded-full border border-neutral-700 px-2 py-0.5 text-[10px] text-neutral-500"
+                title="Questa sub-issue non fa parte del progetto"
+              >
+                Fuori dal progetto
+              </span>
+            )}
             <span className="shrink-0 truncate text-[11px] text-neutral-600" title={`${row.repositoryOwner}/${row.repository}`}>
               {row.repository}
             </span>
