@@ -125,7 +125,12 @@ export default function App() {
       setTokenError(e instanceof GithubApiError ? e.message : "Token non valido.");
       return;
     }
-    await setGithubToken(value);
+    try {
+      await setGithubToken(value);
+    } catch (e) {
+      setTokenError(`Non riesco a salvare il token nel Gestore credenziali di Windows: ${e instanceof Error ? e.message : String(e)}`);
+      return;
+    }
     setToken(value);
     setScreen({ name: "picker" });
   }

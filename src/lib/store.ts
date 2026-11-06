@@ -1,4 +1,5 @@
 import { load, type Store } from "@tauri-apps/plugin-store";
+import { invoke } from "@tauri-apps/api/core";
 import type { SortKey } from "./sort";
 import type { PriorityConfig } from "./priority";
 
@@ -18,19 +19,53 @@ function getStore(): Promise<Store> {
   return storePromise;
 }
 
+// The GitHub token is kept in the OS credential vault (Windows Credential
+// Manager / macOS Keychain, see src-tauri/src/lib.rs), never in settings.json.
+// Older versions stored it there in plain text: it's moved over on first read.
+
 export async function getGithubToken(): Promise<string | null> {
   const store = await getStore();
-  const token = await store.get<string>(TOKEN_KEY);
-  return token ?? null;
+  const legacy = await store.get<string>(TOKEN_KEY);
+  let token: string | null;
+  try {
+    token = await invoke<string | null>("secret_get_token");
+  } catch (e) {
+    // Vault unavailable: keep working with the old copy rather than lock the user out.
+    console.error("Credential vault read failed:", e);
+    return legacy ?? null;
+  }
+  if (legacy) {
+    try {
+      if (!token) {
+        await invoke("secret_set_token", { token: legacy });
+        token = legacy;
+      }
+      await store.delete(TOKEN_KEY);
+      await store.save();
+    } catch (e) {
+      console.error("Moving the token to the credential vault failed:", e);
+      return token ?? legacy;
+    }
+  }
+  return token;
 }
 
+/** Throws if the credential vault can't store it (the token is then not saved anywhere). */
 export async function setGithubToken(token: string): Promise<void> {
+  await invoke("secret_set_token", { token });
   const store = await getStore();
-  await store.set(TOKEN_KEY, token);
-  await store.save();
+  if (await store.has(TOKEN_KEY)) {
+    await store.delete(TOKEN_KEY);
+    await store.save();
+  }
 }
 
 export async function clearGithubToken(): Promise<void> {
+  try {
+    await invoke("secret_delete_token");
+  } catch (e) {
+    console.error("Credential vault delete failed:", e);
+  }
   const store = await getStore();
   await store.delete(TOKEN_KEY);
   await store.save();
