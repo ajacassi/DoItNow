@@ -8,8 +8,11 @@ export const CLOSED_COLUMN = "closed";
 export const REPOSITORY_COLUMN = "repository";
 export const BLOCKED_BY_COLUMN = "blockedBy";
 export const BLOCKING_COLUMN = "blocking";
+/** The computed priority score (see lib/priority) — same value as in the Priority view. */
+export const PRIORITY_SCORE_COLUMN = "priorityScore";
 
 const BUILT_IN_COLUMNS = [
+  { key: PRIORITY_SCORE_COLUMN, label: "Punteggio" },
   { key: ASSIGNEE_COLUMN, label: "Assegnatario" },
   { key: AUTHOR_COLUMN, label: "Autore" },
   { key: REPOSITORY_COLUMN, label: "Repository" },

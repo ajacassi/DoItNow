@@ -20,7 +20,7 @@ import {
   type SavedView,
   type ViewMode,
 } from "../lib/store";
-import { defaultPriorityConfig, normalizeConfig, type PriorityConfig } from "../lib/priority";
+import { defaultPriorityConfig, normalizeConfig, scoreItems, type PriorityConfig, type ScoredItem } from "../lib/priority";
 import { defaultColumns, orderColumns } from "../lib/columns";
 import type { SortKey } from "../lib/sort";
 import ProjectTable from "./ProjectTable";
@@ -342,6 +342,15 @@ export default function ProjectView({
     return items === project.items ? base : { ...base, items };
   }, [project, includeAllRepos, selectedLabels, queryText, parsedQuery]);
 
+  // Priority scores for the Table's "Punteggio" column — computed on the
+  // current view, exactly like the Priority view, so the numbers match.
+  const priorityScores = useMemo(() => {
+    const map = new Map<string, ScoredItem>();
+    if (view !== "table") return map;
+    for (const s of scoreItems(visibleProject.items, visibleProject, priorityConfig).ranked) map.set(s.item.id, s);
+    return map;
+  }, [view, visibleProject, priorityConfig]);
+
   function openNewIssue(statusId?: string) {
     setNewIssueStatusId(statusId ?? null);
     setShowNewIssue(true);
@@ -533,6 +542,7 @@ export default function ProjectView({
               subGroupBy={subGroupBy}
               reversed={statusOrderReversed}
               sortKeys={sortKeys}
+              priorityScores={priorityScores}
               onOpenItem={openItemDetail}
               onOpenIssue={setOpenIssueRef}
               onNewIssueForStatus={openNewIssue}

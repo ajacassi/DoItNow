@@ -19,9 +19,11 @@ import {
   REPOSITORY_COLUMN,
   BLOCKED_BY_COLUMN,
   BLOCKING_COLUMN,
+  PRIORITY_SCORE_COLUMN,
   availableColumns,
 } from "../lib/columns";
 import { sortItems, type SortKey } from "../lib/sort";
+import type { ScoredItem } from "../lib/priority";
 import SubIssueProgress from "./SubIssueProgress";
 import ExternalLink from "./ExternalLink";
 import LabelChip from "./LabelChip";
@@ -34,6 +36,8 @@ interface Props {
   subGroupBy: string;
   reversed: boolean;
   sortKeys: SortKey[];
+  /** Priority score per project item id; items excluded from the ranking are absent. */
+  priorityScores: Map<string, ScoredItem>;
   onOpenItem: (item: ProjectItem) => void;
   /** Open an issue that isn't necessarily a row of this project (e.g. a sub-issue from another repo). */
   onOpenIssue: (ref: IssueRef) => void;
@@ -269,6 +273,43 @@ function RepositoryCell({ item }: { item: ProjectItem }) {
   );
 }
 
+function fmtNum(n: number, digits = 2): string {
+  return n.toFixed(digits).replace(/\.?0+$/, "") || "0";
+}
+
+/** One-line explanation of a score, for the cell tooltip (the full breakdown lives in the Priority view). */
+function scoreTooltip(s: ScoredItem): string {
+  const factors = s.factors
+    .filter((f) => f.value !== null && f.weight > 0)
+    .map((f) => `${f.label}: ${fmtNum(f.value!)} × peso ${fmtNum(f.weight)} (${f.detail})`);
+  const parts = [`base ${fmtNum(100 * s.base, 1)}`];
+  if (s.labelBonus !== 0) parts.push(`label ${s.labelBonus > 0 ? "+" : ""}${fmtNum(s.labelBonus, 1)}`);
+  parts.push(`× stato ${fmtNum(s.statusMultiplier)}`);
+  if (s.blockedMultiplier !== 1) parts.push(`× bloccata ${fmtNum(s.blockedMultiplier)}`);
+  if (s.effortMultiplier !== 1) parts.push(`× effort ${fmtNum(s.effortMultiplier)}`);
+  return [...factors, `${parts.join(" ")} = ${fmtNum(s.score, 1)}`].join("\n");
+}
+
+function ScoreCell({ scored }: { scored: ScoredItem | undefined }) {
+  if (!scored) {
+    return (
+      <span className="text-neutral-700" title="Esclusa dalla classifica di priorità (stato escluso o issue chiusa)">
+        —
+      </span>
+    );
+  }
+  const tone =
+    scored.score >= 70 ? "bg-red-500" : scored.score >= 45 ? "bg-orange-500" : scored.score >= 25 ? "bg-yellow-500" : "bg-neutral-500";
+  return (
+    <div className="flex items-center gap-2" title={scoreTooltip(scored)}>
+      <span className="w-7 text-right text-xs font-semibold tabular-nums text-neutral-200">{Math.round(scored.score)}</span>
+      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-800">
+        <span className={`block h-full ${tone}`} style={{ width: `${Math.min(100, scored.score)}%` }} />
+      </span>
+    </div>
+  );
+}
+
 function DateCell({ iso }: { iso: string | null }) {
   if (!iso) return <span className="text-neutral-700">—</span>;
   return <span className="text-xs text-neutral-300">{new Date(iso).toLocaleDateString("it-IT")}</span>;
@@ -323,11 +364,13 @@ export default function ProjectTable({
   subGroupBy,
   reversed,
   sortKeys,
+  priorityScores,
   onOpenItem,
   onOpenIssue,
   onNewIssueForStatus,
   onMoveItem,
 }: Props) {
+  const scoreById = new Map([...priorityScores].map(([id, s]) => [id, s.score]));
   // The chosen subdivision (if any) becomes the outer grouping, with status
   // always nested inside it — "Nessuno" means status stays the sole, outer
   // grouping, exactly like before this feature existed.
@@ -336,7 +379,7 @@ export default function ProjectTable({
   // outer (no subdivision) or nested inside each subgroup — never the
   // subdivision's own order.
   const outerGroups = visibleGroupEntries(groupItemsBy(project.items, project, outerKey), outerKey === "status" && reversed).map(
-    ([name, items]) => [name, sortItems(items, project, sortKeys)] as const,
+    ([name, items]) => [name, sortItems(items, project, sortKeys, scoreById)] as const,
   );
   const optionId = outerKey === "status" ? new Map(project.statusOptions.map((o) => [o.name, o.id])) : new Map<string, string>();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -530,7 +573,9 @@ export default function ProjectTable({
             />
             {visibleColumns.map((key) => (
               <div key={key} className="min-w-0 px-3 py-2">
-                {key === ASSIGNEE_COLUMN ? (
+                {key === PRIORITY_SCORE_COLUMN ? (
+                  <ScoreCell scored={priorityScores.get(item.id)} />
+                ) : key === ASSIGNEE_COLUMN ? (
                   <AssigneeCell item={item} />
                 ) : key === AUTHOR_COLUMN ? (
                   <AuthorCell item={item} />

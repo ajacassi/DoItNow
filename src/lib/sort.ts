@@ -8,6 +8,7 @@ import {
   REPOSITORY_COLUMN,
   BLOCKED_BY_COLUMN,
   BLOCKING_COLUMN,
+  PRIORITY_SCORE_COLUMN,
 } from "./columns";
 
 export const TITLE_COLUMN = "title";
@@ -41,8 +42,10 @@ function fieldSortValue(project: ProjectDetail, fieldName: string, value: ItemFi
   }
 }
 
-function sortValueFor(item: ProjectItem, project: ProjectDetail, key: string): SortValue {
+function sortValueFor(item: ProjectItem, project: ProjectDetail, key: string, scores?: Map<string, number>): SortValue {
   switch (key) {
+    case PRIORITY_SCORE_COLUMN:
+      return scores?.get(item.id) ?? null;
     case TITLE_COLUMN:
       return item.title;
     case ASSIGNEE_COLUMN:
@@ -73,11 +76,12 @@ function compareValues(a: SortValue, b: SortValue): number {
   return String(a).localeCompare(String(b), "it");
 }
 
-export function sortItems(items: ProjectItem[], project: ProjectDetail, sortKeys: SortKey[]): ProjectItem[] {
+/** `scores` (item id → priority score) is only needed to sort by the priority score column. */
+export function sortItems(items: ProjectItem[], project: ProjectDetail, sortKeys: SortKey[], scores?: Map<string, number>): ProjectItem[] {
   if (sortKeys.length === 0) return items;
   return [...items].sort((a, b) => {
     for (const { key, direction } of sortKeys) {
-      const cmp = compareValues(sortValueFor(a, project, key), sortValueFor(b, project, key));
+      const cmp = compareValues(sortValueFor(a, project, key, scores), sortValueFor(b, project, key, scores));
       if (cmp !== 0) return direction === "asc" ? cmp : -cmp;
     }
     return 0;
