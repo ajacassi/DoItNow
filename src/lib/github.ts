@@ -235,6 +235,8 @@ export interface ProjectItem {
   author: ProjectItemUser | null;
   assignees: ProjectItemUser[];
   labels: ProjectItemLabel[];
+  /** The issue/PR milestone (title + due date), if any — absent on items built locally before a refresh. */
+  milestone?: { title: string; dueOn: string | null } | null;
   fields: Record<string, ItemFieldValue>;
 }
 
@@ -344,6 +346,7 @@ const PROJECT_ITEM_FRAGMENT = `
         repository { name owner { login } }
         assignees(first: 6) { nodes { login avatarUrl } }
         labels(first: 10) { nodes { name color } }
+        milestone { title dueOn }
         createdAt
         updatedAt
         closedAt
@@ -358,6 +361,7 @@ const PROJECT_ITEM_FRAGMENT = `
         repository { name owner { login } }
         assignees(first: 6) { nodes { login avatarUrl } }
         labels(first: 10) { nodes { name color } }
+        milestone { title dueOn }
         createdAt
         updatedAt
         closedAt
@@ -508,6 +512,7 @@ interface RawProjectItemNode {
     repository?: { name: string; owner: { login: string } };
     assignees?: { nodes: ProjectItemUser[] };
     labels?: { nodes: ProjectItemLabel[] };
+    milestone?: { title: string; dueOn: string | null } | null;
     createdAt?: string;
     updatedAt?: string;
     closedAt?: string | null;
@@ -713,6 +718,7 @@ export async function fetchProjectDetail(token: string, org: string, number: num
         author: content.author ?? null,
         assignees: content.assignees?.nodes ?? [],
         labels: content.labels?.nodes ?? [],
+        milestone: content.milestone ?? null,
         fields: fieldMap,
       };
     });

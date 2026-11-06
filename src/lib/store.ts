@@ -1,5 +1,6 @@
 import { load, type Store } from "@tauri-apps/plugin-store";
 import type { SortKey } from "./sort";
+import type { PriorityConfig } from "./priority";
 
 const SETTINGS_FILE = "settings.json";
 const TOKEN_KEY = "github_token";
@@ -96,18 +97,20 @@ export async function setLabelFolders(projectId: string, data: LabelFolders): Pr
   await store.save();
 }
 
+export type ViewMode = "table" | "board" | "gantt" | "priority";
+
 export interface SavedView {
   id: string;
   name: string;
   queryText: string;
   labels: string[];
-  viewMode: "table" | "board" | "gantt";
+  viewMode: ViewMode;
 }
 
 export interface ProjectFilterState {
   queryText: string;
   labels: string[];
-  viewMode: "table" | "board" | "gantt";
+  viewMode: ViewMode;
   activeViewId: string | null;
 }
 
@@ -232,6 +235,30 @@ export async function setTheme(theme: ThemeName): Promise<void> {
   const store = await getStore();
   await store.set(THEME_KEY, theme);
   await store.save();
+}
+
+// Priority scoring configuration (field mapping, weights, status dictionary),
+// one per project — portable like the rest, so it travels with the settings file.
+const PRIORITY_CONFIG_PREFIX = "priority_config_";
+
+export async function getPriorityConfig(projectId: string): Promise<PriorityConfig | null> {
+  const store = await getStore();
+  return (await store.get<PriorityConfig>(`${PRIORITY_CONFIG_PREFIX}${projectId}`)) ?? null;
+}
+
+export async function setPriorityConfig(projectId: string, config: PriorityConfig): Promise<void> {
+  const store = await getStore();
+  await store.set(`${PRIORITY_CONFIG_PREFIX}${projectId}`, config);
+  await store.save();
+}
+
+/** Every saved priority configuration, to copy one from another project. */
+export async function listPriorityConfigs(): Promise<{ projectId: string; config: PriorityConfig }[]> {
+  const store = await getStore();
+  const entries = await store.entries<PriorityConfig>();
+  return entries
+    .filter(([key, value]) => key.startsWith(PRIORITY_CONFIG_PREFIX) && value && value.version === 1)
+    .map(([key, config]) => ({ projectId: key.slice(PRIORITY_CONFIG_PREFIX.length), config }));
 }
 
 // ---------------------------------------------------------------------------

@@ -15,13 +15,19 @@ import {
   setSubGroupBy,
   getIncludeAllRepos,
   setIncludeAllRepos,
+  getPriorityConfig,
+  setPriorityConfig,
   type SavedView,
+  type ViewMode,
 } from "../lib/store";
+import { defaultPriorityConfig, type PriorityConfig } from "../lib/priority";
 import { defaultColumns, orderColumns } from "../lib/columns";
 import type { SortKey } from "../lib/sort";
 import ProjectTable from "./ProjectTable";
 import ProjectBoard from "./ProjectBoard";
 import ProjectGantt from "./ProjectGantt";
+import ProjectPriority from "./ProjectPriority";
+import PriorityConfigEditor from "./PriorityConfigEditor";
 import IssueDetailPanel from "./IssueDetailPanel";
 import NewIssueModal from "./NewIssueModal";
 import ProjectCleanup from "./ProjectCleanup";
@@ -48,8 +54,6 @@ interface Props {
   onOpenNotifications: () => void;
   notificationsRefreshKey: number;
 }
-
-type ViewMode = "table" | "board" | "gantt";
 
 export default function ProjectView({
   token,
@@ -171,6 +175,28 @@ export default function ProjectView({
       setIncludeAllRepos(project.id, next);
       return next;
     });
+  }
+
+  // Priority scoring config (per project). Until the user saves one, an
+  // automatic config deduced from the project's fields is used.
+  const [savedPriorityConfig, setSavedPriorityConfig] = useState<PriorityConfig | null>(null);
+  const [showPriorityConfig, setShowPriorityConfig] = useState(false);
+
+  useEffect(() => {
+    setSavedPriorityConfig(null);
+    getPriorityConfig(project.id).then(setSavedPriorityConfig);
+  }, [project.id]);
+
+  const priorityConfig = useMemo(
+    () => savedPriorityConfig ?? defaultPriorityConfig(project),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [savedPriorityConfig, project.id, project.fields],
+  );
+
+  function savePriorityConfig(config: PriorityConfig) {
+    setSavedPriorityConfig(config);
+    setPriorityConfig(project.id, config);
+    setShowPriorityConfig(false);
   }
 
   // Total issue count (all states) for the repo most of this project's items
@@ -385,7 +411,7 @@ export default function ProjectView({
           </button>
           {view === "table" && <ColumnPicker project={project} selected={visibleColumns} onToggle={toggleColumn} />}
           {view === "table" && <SortPicker project={project} sortKeys={sortKeys} onChange={changeSortKeys} />}
-          <GroupByPicker project={project} value={subGroupBy} onChange={changeSubGroupBy} />
+          {view !== "priority" && <GroupByPicker project={project} value={subGroupBy} onChange={changeSubGroupBy} />}
           {(view === "table" || view === "gantt") && (
             <button
               onClick={toggleStatusOrder}
@@ -419,6 +445,15 @@ export default function ProjectView({
               }`}
             >
               Gantt
+            </button>
+            <button
+              onClick={() => setView("priority")}
+              title="Ordina le issue della vista corrente per punteggio di priorità"
+              className={`rounded-md px-3 py-1 transition ${
+                view === "priority" ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300"
+              }`}
+            >
+              Priorità
             </button>
           </div>
           <button
@@ -511,6 +546,14 @@ export default function ProjectView({
               onNewIssueForStatus={openNewIssue}
               onMoveItem={moveItemToStatus}
             />
+          ) : view === "priority" ? (
+            <ProjectPriority
+              project={visibleProject}
+              config={priorityConfig}
+              configSaved={savedPriorityConfig !== null}
+              onOpenItem={openItemDetail}
+              onEditConfig={() => setShowPriorityConfig(true)}
+            />
           ) : (
             <ProjectGantt project={visibleProject} subGroupBy={subGroupBy} reversed={statusOrderReversed} onOpenItem={openItemDetail} />
           )}
@@ -546,6 +589,15 @@ export default function ProjectView({
 
       {showCleanup && (
         <ProjectCleanup token={token} project={project} onClose={() => setShowCleanup(false)} onItemRemoved={onItemRemoved} />
+      )}
+
+      {showPriorityConfig && (
+        <PriorityConfigEditor
+          project={project}
+          config={priorityConfig}
+          onClose={() => setShowPriorityConfig(false)}
+          onSave={savePriorityConfig}
+        />
       )}
 
       {showMilestones && (
