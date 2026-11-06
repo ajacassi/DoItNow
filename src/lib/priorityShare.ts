@@ -34,7 +34,7 @@ export function suggestedFileName(projectTitle: string): string {
   return `doitnow-priorita-${slug || "progetto"}.json`;
 }
 
-const VIEW_MODES = new Set(["table", "board", "gantt", "priority"]);
+const VIEW_MODES = new Set(["table", "board", "gantt", "priority", "analytics"]);
 
 /** Throws an Italian message if `text` isn't a priority file exported by this app. */
 export function parseSharedPriority(text: string): SharedPriorityFile {

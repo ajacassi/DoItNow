@@ -2,6 +2,7 @@ import { load, type Store } from "@tauri-apps/plugin-store";
 import { invoke } from "@tauri-apps/api/core";
 import type { SortKey } from "./sort";
 import type { PriorityConfig } from "./priority";
+import type { Phase } from "./phases";
 
 const SETTINGS_FILE = "settings.json";
 const TOKEN_KEY = "github_token";
@@ -132,7 +133,7 @@ export async function setLabelFolders(projectId: string, data: LabelFolders): Pr
   await store.save();
 }
 
-export type ViewMode = "table" | "board" | "gantt" | "priority";
+export type ViewMode = "table" | "board" | "gantt" | "priority" | "analytics";
 
 export interface SavedView {
   id: string;
@@ -269,6 +270,18 @@ export async function getTheme(): Promise<ThemeName | null> {
 export async function setTheme(theme: ThemeName): Promise<void> {
   const store = await getStore();
   await store.set(THEME_KEY, theme);
+  await store.save();
+}
+
+// Status → work phase mapping for the analytics view, one per project.
+export async function getStatusPhases(projectId: string): Promise<Record<string, Phase>> {
+  const store = await getStore();
+  return (await store.get<Record<string, Phase>>(`status_phases_${projectId}`)) ?? {};
+}
+
+export async function setStatusPhases(projectId: string, phases: Record<string, Phase>): Promise<void> {
+  const store = await getStore();
+  await store.set(`status_phases_${projectId}`, phases);
   await store.save();
 }
 

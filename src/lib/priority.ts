@@ -516,3 +516,25 @@ export function scoreItems(items: ProjectItem[], project: ProjectDetail, config:
   );
   return { ranked, excluded };
 }
+
+// ---------------------------------------------------------------------------
+// Helpers shared with the analytics view
+// ---------------------------------------------------------------------------
+
+/** The due date an issue is judged by: the configured date field, else (if enabled) its milestone's. */
+export function resolveDueDate(item: ProjectItem, config: PriorityConfig): { date: string; source: "field" | "milestone" } | null {
+  const v = config.due.field ? item.fields[config.due.field] : undefined;
+  if (v?.type === "date" && v.date) return { date: v.date, source: "field" };
+  if (config.due.useMilestone && item.milestone?.dueOn) return { date: item.milestone.dueOn, source: "milestone" };
+  return null;
+}
+
+/** Whole days from today to `date` ("YYYY-MM-DD" or ISO) — negative when past. */
+export function daysFromToday(date: string, now = new Date()): number {
+  return Math.round((parseDay(date) - startOfDay(now)) / DAY_MS);
+}
+
+/** The issue's effort in the configured field's units (select options via the dictionary), or null. */
+export function itemEffort(item: ProjectItem, project: ProjectDetail, config: PriorityConfig): number | null {
+  return config.effort.field ? rawEffort(item, project, config) : null;
+}

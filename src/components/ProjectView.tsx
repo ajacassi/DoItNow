@@ -17,6 +17,8 @@ import {
   setIncludeAllRepos,
   getPriorityConfig,
   setPriorityConfig,
+  getStatusPhases,
+  setStatusPhases,
   type SavedView,
   type ViewMode,
 } from "../lib/store";
@@ -28,6 +30,8 @@ import ProjectTable from "./ProjectTable";
 import ProjectBoard from "./ProjectBoard";
 import ProjectGantt from "./ProjectGantt";
 import ProjectPriority from "./ProjectPriority";
+import ProjectAnalytics from "./ProjectAnalytics";
+import { materializePhases, type Phase } from "../lib/phases";
 import PriorityConfigEditor from "./PriorityConfigEditor";
 import IssueDetailPanel from "./IssueDetailPanel";
 import NewIssueModal from "./NewIssueModal";
@@ -193,6 +197,21 @@ export default function ProjectView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [savedPriorityConfig, project.id, project.fields],
   );
+
+  // Status → work phase mapping for the Analisi view (statuses differ per project).
+  const [statusPhases, setStatusPhasesState] = useState<Record<string, Phase>>({});
+
+  useEffect(() => {
+    setStatusPhasesState({});
+    getStatusPhases(project.id).then(setStatusPhasesState);
+  }, [project.id]);
+
+  function changeStatusPhases(next: Record<string, Phase>) {
+    // An empty map means "back to automatic"; otherwise store the full, explicit mapping.
+    const value = Object.keys(next).length === 0 ? {} : materializePhases(project, next);
+    setStatusPhasesState(value);
+    setStatusPhases(project.id, value);
+  }
 
   function savePriorityConfig(config: PriorityConfig) {
     setSavedPriorityConfig(config);
@@ -436,7 +455,7 @@ export default function ProjectView({
           </button>
           {view === "table" && <ColumnPicker project={project} selected={visibleColumns} onToggle={toggleColumn} />}
           {view === "table" && <SortPicker project={project} sortKeys={sortKeys} onChange={changeSortKeys} />}
-          {view !== "priority" && <GroupByPicker project={project} value={subGroupBy} onChange={changeSubGroupBy} />}
+          {view !== "priority" && view !== "analytics" && <GroupByPicker project={project} value={subGroupBy} onChange={changeSubGroupBy} />}
           {(view === "table" || view === "gantt") && (
             <button
               onClick={toggleStatusOrder}
@@ -479,6 +498,15 @@ export default function ProjectView({
               }`}
             >
               Priorità
+            </button>
+            <button
+              onClick={() => setView("analytics")}
+              title="Grafici sulla distribuzione del lavoro nella vista corrente"
+              className={`rounded-md px-3 py-1 transition ${
+                view === "analytics" ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300"
+              }`}
+            >
+              Analisi
             </button>
           </div>
           <button
@@ -571,6 +599,14 @@ export default function ProjectView({
               onOpenItem={openItemDetail}
               onNewIssueForStatus={openNewIssue}
               onMoveItem={moveItemToStatus}
+            />
+          ) : view === "analytics" ? (
+            <ProjectAnalytics
+              project={visibleProject}
+              config={priorityConfig}
+              phases={statusPhases}
+              onChangePhases={changeStatusPhases}
+              onOpenItem={openItemDetail}
             />
           ) : view === "priority" ? (
             <ProjectPriority

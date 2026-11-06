@@ -102,3 +102,33 @@
   --tw-prose-invert-th-borders: oklch(87.2% .01 258.338);
   --tw-prose-invert-td-borders: oklch(92.8% .006 264.531);
 }
+
+/*
+ * Chart colors (Analisi view), validated for color-vision deficiency and
+ * contrast against each theme's card surface (dark #171717, light #ffffff).
+ * Phases are an ordinal one-hue ramp (faint = still to do, strong = closing);
+ * s1/s2 are the two categorical series; status colors carry due-date risk and
+ * always ship with a label.
+ */
+:root {
+  --viz-surface: #171717;
+  --viz-grid: #2e2e2e;
+  --viz-s1: #3987e5;
+  --viz-s2: #d95926;
+  --viz-ph-todo: #184f95;
+  --viz-ph-doing: #3987e5;
+  --viz-ph-closing: #9ec5f4;
+  --viz-good: #0ca30c;
+  --viz-warning: #fab219;
+  --viz-serious: #ec835a;
+  --viz-critical: #d03b3b;
+}
+[data-theme="vivid"] {
+  --viz-surface: #ffffff;
+  --viz-grid: #e7e4f3;
+  --viz-s1: #2a78d6;
+  --viz-s2: #eb6834;
+  --viz-ph-todo: #86b6ef;
+  --viz-ph-doing: #2a78d6;
+  --viz-ph-closing: #104281;
+}

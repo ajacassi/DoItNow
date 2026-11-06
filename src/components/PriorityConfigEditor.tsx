@@ -39,7 +39,7 @@ interface Props {
   onCreateView: (view: SharedView) => string;
 }
 
-const MODE_LABEL: Record<string, string> = { table: "Tabella", board: "Board", gantt: "Gantt", priority: "Priorità" };
+const MODE_LABEL: Record<string, string> = { table: "Tabella", board: "Board", gantt: "Gantt", priority: "Priorità", analytics: "Analisi" };
 
 /** Number input that keeps the raw text while typing ("0.", "") and commits a valid number on blur/Enter. */
 function NumField({
