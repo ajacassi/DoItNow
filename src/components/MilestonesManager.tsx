@@ -14,7 +14,8 @@ import {
   type IssueRef,
 } from "../lib/github";
 import IssuePicker from "./IssuePicker";
-import ExternalLink from "./ExternalLink";
+import { GitHubIconLink } from "./ExternalLink";
+import { useDialog } from "../lib/useDialog";
 
 interface Props {
   token: string;
@@ -40,6 +41,7 @@ function isOverdue(m: MilestoneSummary): boolean {
 }
 
 export default function MilestonesManager({ token, org, project, repo, onClose, onOpenIssue }: Props) {
+  const dialogRef = useDialog(onClose);
   const [milestones, setMilestones] = useState<MilestoneSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -188,7 +190,7 @@ export default function MilestonesManager({ token, org, project, repo, onClose, 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950 text-neutral-100">
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Milestone" className="fixed inset-0 z-50 flex flex-col bg-neutral-950 text-neutral-100">
       <header className="flex items-center justify-between border-b border-neutral-800 px-8 py-4">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Milestone</h1>
@@ -216,7 +218,7 @@ export default function MilestonesManager({ token, org, project, repo, onClose, 
         {error && <div className="mb-3 rounded-lg border border-red-900 bg-red-950/40 px-3 py-2 text-xs text-red-300">{error}</div>}
 
         {!repo ? (
-          <p className="text-sm text-neutral-600">Nessuna repository rilevata per questo progetto.</p>
+          <p className="text-sm text-subtle">Nessuna repository rilevata per questo progetto.</p>
         ) : showCreate ? (
           <div className="max-w-lg rounded-lg border border-neutral-800 bg-neutral-900/50 p-4">
             <h3 className="mb-3 text-sm font-medium">Nuova milestone</h3>
@@ -263,7 +265,7 @@ export default function MilestonesManager({ token, org, project, repo, onClose, 
         ) : milestones == null ? (
           <p className="text-sm text-neutral-500">Carico…</p>
         ) : milestones.length === 0 ? (
-          <p className="text-sm text-neutral-600">Nessuna milestone in questo repository.</p>
+          <p className="text-sm text-subtle">Nessuna milestone in questo repository.</p>
         ) : (
           <div className="space-y-3">
             {milestones.map((m) => {
@@ -331,16 +333,14 @@ export default function MilestonesManager({ token, org, project, repo, onClose, 
                             {m.description && <p className="mt-1 truncate text-xs text-neutral-500">{m.description}</p>}
                           </button>
                           <div className="flex shrink-0 items-center gap-2">
-                            <ExternalLink href={m.url} className="text-xs text-neutral-600 hover:text-neutral-400">
-                              ↗
-                            </ExternalLink>
+                            <GitHubIconLink href={m.url} className="text-subtle hover:text-neutral-400" />
                             <button onClick={() => startEdit(m)} className="text-xs text-neutral-500 hover:text-neutral-200">
                               Modifica
                             </button>
                             <button onClick={() => toggleState(m)} className="text-xs text-neutral-500 hover:text-neutral-200">
                               {m.state === "OPEN" ? "Chiudi" : "Riapri"}
                             </button>
-                            <button onClick={() => setConfirmDelete(m.number)} className="text-xs text-neutral-600 hover:text-red-400">
+                            <button onClick={() => setConfirmDelete(m.number)} className="text-xs text-subtle hover:text-red-400">
                               Elimina
                             </button>
                           </div>
@@ -385,7 +385,7 @@ export default function MilestonesManager({ token, org, project, repo, onClose, 
                       ) : (
                         <>
                           {(issues ?? []).length === 0 ? (
-                            <p className="text-xs text-neutral-600">Nessuna issue in questa milestone.</p>
+                            <p className="text-xs text-subtle">Nessuna issue in questa milestone.</p>
                           ) : (
                             <ul className="mb-2 space-y-1.5">
                               {(issues ?? []).map((issue) => (

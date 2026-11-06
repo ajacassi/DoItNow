@@ -153,12 +153,12 @@ export default function LabelFilterSidebar({ projectId, items, linkedRepos, sele
         <label className="min-w-0 flex-1 truncate text-sm text-neutral-200" onClick={() => onToggle(l.name)}>
           {l.name}
         </label>
-        <span className="shrink-0 text-xs text-neutral-600">{l.count}</span>
+        <span className="shrink-0 text-xs text-subtle">{l.count}</span>
         <select
           value={folders.assignment[l.name] ?? ""}
           onChange={(e) => assignLabel(l.name, e.target.value)}
           title="Sposta in cartella"
-          className="w-16 shrink-0 rounded border-none bg-transparent text-[10px] text-neutral-600 outline-none"
+          className="w-16 shrink-0 rounded border-none bg-transparent text-[10px] text-subtle outline-none"
         >
           <option value="">—</option>
           {folders.folders.map((f) => (
@@ -196,6 +196,7 @@ export default function LabelFilterSidebar({ projectId, items, linkedRepos, sele
             onKeyDown={(e) => {
               if (e.key === "Enter") addFolder();
               if (e.key === "Escape") {
+                e.preventDefault();
                 setAddingFolder(false);
                 setNewFolderName("");
               }
@@ -221,10 +222,10 @@ export default function LabelFilterSidebar({ projectId, items, linkedRepos, sele
           <label className="min-w-0 flex-1 truncate text-sm italic text-neutral-400" onClick={() => onToggle(NO_LABEL_KEY)}>
             Senza label
           </label>
-          <span className="shrink-0 text-xs text-neutral-600">{noLabelCount}</span>
+          <span className="shrink-0 text-xs text-subtle">{noLabelCount}</span>
         </div>
 
-        {allLabels.length === 0 && <p className="px-2 text-xs text-neutral-600">Nessuna label nel progetto.</p>}
+        {allLabels.length === 0 && <p className="px-2 text-xs text-subtle">Nessuna label nel progetto.</p>}
 
         {orderedKeys.map((key) => {
           const labels = groups.get(key) ?? [];
@@ -254,10 +255,10 @@ export default function LabelFilterSidebar({ projectId, items, linkedRepos, sele
                 <button onClick={() => toggleCollapse(key)} className="flex min-w-0 flex-1 items-center gap-1.5">
                   <ChevronIcon open={!isCollapsed} />
                   <span className="truncate text-xs font-medium text-neutral-400">{title}</span>
-                  <span className="shrink-0 text-xs text-neutral-700">{labels.length}</span>
+                  <span className="shrink-0 text-xs text-subtle">{labels.length}</span>
                 </button>
                 {key !== UNASSIGNED && (
-                  <button onClick={() => removeFolder(key)} title="Elimina cartella" className="shrink-0 text-neutral-700 hover:text-neutral-400">
+                  <button onClick={() => removeFolder(key)} title="Elimina cartella" className="shrink-0 text-subtle hover:text-neutral-400">
                     ×
                   </button>
                 )}
@@ -267,7 +268,7 @@ export default function LabelFilterSidebar({ projectId, items, linkedRepos, sele
                   {labels.map((l) => (
                     <LabelRow key={l.name} l={l} />
                   ))}
-                  {labels.length === 0 && <p className="px-3 pb-1 text-[11px] text-neutral-700">Vuota</p>}
+                  {labels.length === 0 && <p className="px-3 pb-1 text-[11px] text-subtle">Vuota</p>}
                 </div>
               )}
             </div>

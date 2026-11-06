@@ -25,7 +25,7 @@ export default function ColumnPicker({ project, selected, onToggle }: Props) {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-20 mt-1 w-56 rounded-lg border border-neutral-700 bg-neutral-900 p-1.5 shadow-xl">
+          <div className="absolute left-0 z-20 mt-1 w-56 rounded-lg border border-neutral-700 bg-neutral-900 p-1.5 shadow-xl">
             {options.map((o) => (
               <label
                 key={o.key}
@@ -35,7 +35,7 @@ export default function ColumnPicker({ project, selected, onToggle }: Props) {
                 <span className="truncate">{o.label}</span>
               </label>
             ))}
-            {options.length === 0 && <p className="px-2 py-1.5 text-xs text-neutral-600">Nessun campo disponibile.</p>}
+            {options.length === 0 && <p className="px-2 py-1.5 text-xs text-subtle">Nessun campo disponibile.</p>}
           </div>
         </>
       )}

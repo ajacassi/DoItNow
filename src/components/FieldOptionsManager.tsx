@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { X } from "lucide-react";
 import {
   updateSingleSelectFieldOptions,
   updateMultiSelectFieldOptions,
@@ -7,6 +8,7 @@ import {
   type FieldOptionInput,
 } from "../lib/github";
 import { colorStyle } from "../lib/colors";
+import { useDialog } from "../lib/useDialog";
 
 interface Props {
   token: string;
@@ -22,6 +24,7 @@ const PALETTE = ["GRAY", "BLUE", "GREEN", "YELLOW", "ORANGE", "RED", "PINK", "PU
 const DEFAULT_COLOR = "BLUE";
 
 export default function FieldOptionsManager({ token, fieldId, fieldName, kind, options, onClose, onOptionsChanged }: Props) {
+  const dialogRef = useDialog(onClose);
   const [editing, setEditing] = useState<StatusOption | "new" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<StatusOption | null>(null);
   const [name, setName] = useState("");
@@ -99,6 +102,7 @@ export default function FieldOptionsManager({ token, fieldId, fieldName, kind, o
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60" onClick={onClose}>
       <div
+        ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`Opzioni di ${fieldName}`}
         className="flex max-h-[80vh] w-full max-w-md flex-col rounded-xl border border-neutral-800 bg-neutral-950 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -112,8 +116,8 @@ export default function FieldOptionsManager({ token, fieldId, fieldName, kind, o
                   : `Modifica opzione — ${fieldName}`
                 : `Opzioni — ${fieldName}`}
           </h2>
-          <button onClick={onClose} className="text-neutral-500 hover:text-neutral-200">
-            ✕
+          <button onClick={onClose} aria-label="Chiudi" title="Chiudi" className="-m-1 rounded p-1 text-neutral-500 hover:text-neutral-200">
+            <X size={16} aria-hidden />
           </button>
         </div>
 
@@ -164,14 +168,14 @@ export default function FieldOptionsManager({ token, fieldId, fieldName, kind, o
                       <button onClick={() => startEdit(o)} className="text-xs text-neutral-500 hover:text-neutral-200">
                         Modifica
                       </button>
-                      <button onClick={() => setConfirmDelete(o)} className="text-xs text-neutral-600 hover:text-red-400">
+                      <button onClick={() => setConfirmDelete(o)} className="text-xs text-subtle hover:text-red-400">
                         Elimina
                       </button>
                     </div>
                   </div>
                 );
               })}
-              {options.length === 0 && <p className="px-1.5 py-1 text-xs text-neutral-600">Nessuna opzione.</p>}
+              {options.length === 0 && <p className="px-1.5 py-1 text-xs text-subtle">Nessuna opzione.</p>}
             </div>
             <div className="border-t border-neutral-800 p-3">
               <button

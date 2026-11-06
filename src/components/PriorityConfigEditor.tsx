@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { TriangleAlert } from "lucide-react";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
 import type { ProjectDetail } from "../lib/github";
@@ -27,6 +28,7 @@ import {
   type SharedView,
 } from "../lib/priorityShare";
 import LabelChip from "./LabelChip";
+import { useDialog } from "../lib/useDialog";
 
 interface Props {
   project: ProjectDetail;
@@ -141,6 +143,7 @@ const SELECT_CLASS =
   "rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1 text-xs outline-none focus:border-indigo-500";
 
 export default function PriorityConfigEditor({ project, config, currentView, onClose, onSave, onCreateView }: Props) {
+  const dialogRef = useDialog(onClose);
   const [draft, setDraft] = useState<PriorityConfig>(config);
   const [others, setOthers] = useState<{ projectId: string; config: PriorityConfig }[]>([]);
   const [copyFrom, setCopyFrom] = useState("");
@@ -209,7 +212,7 @@ export default function PriorityConfigEditor({ project, config, currentView, onC
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950 text-neutral-100">
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Configura priorità" className="fixed inset-0 z-50 flex flex-col bg-neutral-950 text-neutral-100">
       <header className="flex items-center justify-between border-b border-neutral-800 px-8 py-4">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Configura priorità</h1>
@@ -321,7 +324,10 @@ export default function PriorityConfigEditor({ project, config, currentView, onC
           {warnings.length > 0 && (
             <div className="rounded-lg border border-amber-700/50 bg-amber-950/30 p-3 text-xs text-amber-300">
               {warnings.map((w) => (
-                <div key={w}>⚠ {w}</div>
+                <div key={w} className="flex items-start gap-1.5">
+                  <TriangleAlert size={13} className="mt-px shrink-0" aria-hidden />
+                  <span>{w}</span>
+                </div>
               ))}
             </div>
           )}
@@ -350,14 +356,14 @@ export default function PriorityConfigEditor({ project, config, currentView, onC
                 checked={draft.due.useMilestone}
                 onChange={(e) => patch("due", { useMilestone: e.target.checked })}
               />
-              <span className="text-neutral-600">la data di scadenza della milestone dell'issue</span>
+              <span className="text-subtle">la data di scadenza della milestone dell'issue</span>
             </Row>
             <Row label="Peso">
               <NumField value={draft.due.weight} onChange={(n) => patch("due", { weight: n })} step={1} min={0} />
             </Row>
             <Row label="Orizzonte (giorni)">
               <NumField value={draft.due.horizonDays} onChange={(n) => patch("due", { horizonDays: n })} step={1} min={1} />
-              <span className="text-neutral-600">oltre questi giorni l'urgenza è 0, poi sale fino a 1 alla scadenza</span>
+              <span className="text-subtle">oltre questi giorni l'urgenza è 0, poi sale fino a 1 alla scadenza</span>
             </Row>
             <Row label="Senza data">
               <MissingField value={draft.due.missing} onChange={(v) => patch("due", { missing: v })} />
@@ -428,7 +434,7 @@ export default function PriorityConfigEditor({ project, config, currentView, onC
                       <input type="checkbox" checked={excluded} onChange={(e) => setStatus(e.target.checked ? EXCLUDE : 1)} />
                       Escludi
                     </label>
-                    <span className="text-neutral-600">×</span>
+                    <span className="text-subtle">×</span>
                     <NumField value={excluded ? 1 : (value as number)} disabled={excluded} min={0} max={3} onChange={setStatus} />
                     {auto && <AutoTag />}
                   </div>
@@ -437,7 +443,7 @@ export default function PriorityConfigEditor({ project, config, currentView, onC
             </div>
             <Row label="Escludi issue chiuse">
               <input type="checkbox" checked={draft.excludeClosed} onChange={(e) => setDraft((d) => ({ ...d, excludeClosed: e.target.checked }))} />
-              <span className="text-neutral-600">issue chiuse e PR unite, qualunque sia lo stato nel progetto</span>
+              <span className="text-subtle">issue chiuse e PR unite, qualunque sia lo stato nel progetto</span>
             </Row>
           </Section>
 
@@ -447,11 +453,11 @@ export default function PriorityConfigEditor({ project, config, currentView, onC
             </Row>
             <Row label="Fattore pieno da">
               <NumField value={draft.blocking.saturateAt} onChange={(n) => patch("blocking", { saturateAt: n })} step={1} min={1} />
-              <span className="text-neutral-600">issue bloccate (meno = proporzionale)</span>
+              <span className="text-subtle">issue bloccate (meno = proporzionale)</span>
             </Row>
             <Row label="Moltiplicatore se bloccata">
               <NumField value={draft.blockedMultiplier} onChange={(n) => setDraft((d) => ({ ...d, blockedMultiplier: n }))} min={0} max={1} />
-              <span className="text-neutral-600">0.5 = dimezza il punteggio finché c'è un blocco aperto</span>
+              <span className="text-subtle">0.5 = dimezza il punteggio finché c'è un blocco aperto</span>
             </Row>
           </Section>
 
@@ -490,12 +496,12 @@ export default function PriorityConfigEditor({ project, config, currentView, onC
                 {draft.effort.mode === "divide" ? (
                   <Row label="Intensità">
                     <NumField value={draft.effort.strength} onChange={(n) => patch("effort", { strength: n })} min={0} max={2} />
-                    <span className="text-neutral-600">× (mediana / effort) ^ intensità — 0.5 = radice, 1 = WSJF puro; limitato tra ×0.25 e ×4</span>
+                    <span className="text-subtle">× (mediana / effort) ^ intensità — 0.5 = radice, 1 = WSJF puro; limitato tra ×0.25 e ×4</span>
                   </Row>
                 ) : (
                   <Row label="Peso «rapidità»">
                     <NumField value={draft.effort.weight} onChange={(n) => patch("effort", { weight: n })} step={1} min={0} />
-                    <span className="text-neutral-600">fattore = mediana / (mediana + effort): 0.5 alla mediana, verso 1 se molto piccola</span>
+                    <span className="text-subtle">fattore = mediana / (mediana + effort): 0.5 alla mediana, verso 1 se molto piccola</span>
                   </Row>
                 )}
                 <Row label="Senza effort">
@@ -522,7 +528,7 @@ export default function PriorityConfigEditor({ project, config, currentView, onC
                             step={1}
                             onChange={(n) => patch("effort", { values: { ...draft.effort.values, [o.name]: n } })}
                           />
-                          <span className="text-neutral-600">unità</span>
+                          <span className="text-subtle">unità</span>
                           {auto && <AutoTag />}
                         </div>
                       );
@@ -558,7 +564,7 @@ export default function PriorityConfigEditor({ project, config, currentView, onC
                   max={100}
                   onChange={(n) => setDraft((d) => ({ ...d, labelBonus: { ...d.labelBonus, [name]: n } }))}
                 />
-                <span className="text-neutral-600">punti</span>
+                <span className="text-subtle">punti</span>
                 <button
                   onClick={() =>
                     setDraft((d) => {
@@ -567,7 +573,7 @@ export default function PriorityConfigEditor({ project, config, currentView, onC
                       return { ...d, labelBonus: next };
                     })
                   }
-                  className="text-neutral-600 hover:text-red-400"
+                  className="text-subtle hover:text-red-400"
                 >
                   rimuovi
                 </button>

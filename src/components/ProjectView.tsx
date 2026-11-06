@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown, ArrowLeft, ArrowUp, BrushCleaning, Plus, RefreshCw, Tags, Target } from "lucide-react";
 import type { ProjectDetail, ProjectItem, IssueRef, StatusOption, SubIssueRow } from "../lib/github";
 import { setProjectFieldSingleSelect, fetchRepoIssueCount, mostCommonRepo, subIssueAsItem, DEFAULT_GROUPING, groupingHasStatus, type Grouping } from "../lib/github";
 import { parseIssueQuery, matchesIssueQuery, unknownQueryFields } from "../lib/query";
 import QueryWarning from "./QueryWarning";
+import QuerySyntaxHelp from "./QuerySyntaxHelp";
 import {
   getProjectViewState,
   setProjectViewState,
@@ -60,6 +62,18 @@ interface Props {
   onOpenNotifications: () => void;
   notificationsRefreshKey: number;
 }
+
+const VIEW_TABS: { key: ViewMode; label: string; title?: string }[] = [
+  { key: "table", label: "Tabella" },
+  { key: "board", label: "Board" },
+  { key: "gantt", label: "Gantt" },
+  { key: "priority", label: "Priorità", title: "Ordina le issue della vista corrente per punteggio di priorità" },
+  { key: "analytics", label: "Analisi", title: "Grafici sulla distribuzione del lavoro nella vista corrente" },
+];
+
+/** Secondary header action: icon only on smaller windows, icon + text on very wide ones. */
+const TOOL_BUTTON =
+  "inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-neutral-800 px-2 py-1.5 text-xs text-neutral-300 transition hover:border-neutral-500 disabled:opacity-50";
 
 export default function ProjectView({
   token,
@@ -428,54 +442,109 @@ export default function ProjectView({
 
   return (
     <div className="flex h-screen w-full flex-col bg-neutral-950 text-neutral-100">
-      <header className="flex items-center justify-between border-b border-neutral-800 px-8 py-4">
-        <div className="flex items-center gap-3">
-          <button onClick={onBack} className="text-sm text-neutral-500 hover:text-neutral-300">
-            ← Progetti
-          </button>
-          <h1 className="text-lg font-semibold tracking-tight">{project.title}</h1>
-          {repoIssueCount !== null && badgeRepo && (
-            <span className="text-xs text-neutral-600" title={`${badgeRepo.owner}/${badgeRepo.name}`}>
-              {repoIssueCount} issue nel repo
-            </span>
-          )}
+      <header className="border-b border-neutral-800">
+        {/* Row 1 — where you are, which view, and project-wide actions. */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-6 pb-2 pt-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <button
+              onClick={onBack}
+              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-sm text-neutral-500 hover:text-neutral-300"
+            >
+              <ArrowLeft size={14} aria-hidden /> Progetti
+            </button>
+            <h1 className="min-w-0 truncate text-lg font-semibold tracking-tight" title={project.title}>
+              {project.title}
+            </h1>
+            {repoIssueCount !== null && badgeRepo && (
+              <span className="shrink-0 whitespace-nowrap text-xs text-subtle" title={`${badgeRepo.owner}/${badgeRepo.name}`}>
+                {repoIssueCount} issue nel repo
+              </span>
+            )}
+          </div>
+
+          <nav aria-label="Viste" className="flex shrink-0 rounded-lg border border-neutral-800 p-0.5 text-xs">
+            {VIEW_TABS.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setView(t.key)}
+                title={t.title}
+                aria-current={view === t.key ? "page" : undefined}
+                className={`whitespace-nowrap rounded-md px-3 py-1 transition ${
+                  view === t.key ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              onClick={onRefresh}
+              disabled={refreshing}
+              title="Ricarica il progetto da GitHub"
+              aria-label={refreshing ? "Aggiorno…" : "Aggiorna"}
+              className={TOOL_BUTTON}
+            >
+              <RefreshCw size={14} className={refreshing ? "animate-spin" : undefined} aria-hidden />
+              <span className="hidden 2xl:inline">{refreshing ? "Aggiorno…" : "Aggiorna"}</span>
+            </button>
+            <button
+              onClick={() => setShowMilestones(true)}
+              title="Gestisci le milestone del repository: crea, modifica, elimina, assegna issue"
+              aria-label="Milestone"
+              className={TOOL_BUTTON}
+            >
+              <Target size={14} aria-hidden />
+              <span className="hidden 2xl:inline">Milestone</span>
+            </button>
+            <NotificationsButton token={token} onOpen={onOpenNotifications} refreshKey={notificationsRefreshKey} />
+            <button
+              onClick={() => setShowCleanup(true)}
+              title="Seleziona issue con una query per scollegarle o eliminarle in blocco — azione separata, ad accesso volontario"
+              aria-label="Pulizia progetto"
+              className="flex items-center rounded-lg border border-neutral-800 px-2 py-1.5 text-xs text-subtle transition hover:border-amber-800 hover:text-amber-500"
+            >
+              <BrushCleaning size={15} aria-hidden />
+            </button>
+            <button
+              onClick={() => openNewIssue()}
+              className="ml-1 inline-flex items-center gap-1 whitespace-nowrap rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-500"
+            >
+              <Plus size={14} aria-hidden /> Nuova issue
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => openNewIssue()}
-            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-500"
-          >
-            + Nuova issue
-          </button>
+        {/* Row 2 — what this view shows and how: filters, columns, sorting, grouping. */}
+        <div className="flex flex-wrap items-center gap-2 px-6 pb-3">
           <button
             onClick={() => setShowLabelFilter((v) => !v)}
-            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition ${
-              showLabelFilter
-                ? "border-indigo-500 text-indigo-300"
-                : "border-neutral-800 text-neutral-300 hover:border-neutral-500"
+            aria-pressed={showLabelFilter}
+            className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-1.5 text-xs transition ${
+              showLabelFilter ? "border-indigo-500 text-indigo-300" : "border-neutral-800 text-neutral-300 hover:border-neutral-500"
             }`}
           >
-            Label
+            <Tags size={13} aria-hidden /> Label
             {selectedLabels.size > 0 && (
-              <span className="rounded-full bg-indigo-600 px-1.5 text-[10px] font-semibold text-white">
-                {selectedLabels.size}
-              </span>
+              <span className="rounded-full bg-indigo-600 px-1.5 text-[10px] font-semibold text-white">{selectedLabels.size}</span>
             )}
           </button>
           <button
             onClick={toggleIncludeAllRepos}
+            aria-pressed={includeAllRepos}
             title={
               includeAllRepos
                 ? "Stai vedendo anche le issue di repository non collegati al progetto — clicca per mostrare solo quelle dei repo del progetto"
                 : "Mostra solo le issue dei repository collegati al progetto — clicca per includere anche quelle di altri repository"
             }
-            className={`rounded-lg border px-3 py-1.5 text-xs transition ${
+            className={`whitespace-nowrap rounded-lg border px-3 py-1.5 text-xs transition ${
               includeAllRepos ? "border-indigo-500 text-indigo-300" : "border-neutral-800 text-neutral-300 hover:border-neutral-500"
             }`}
           >
             Tutti i repo
           </button>
+          {view !== "priority" && view !== "analytics" && <span className="mx-1 h-5 w-px shrink-0 bg-neutral-800" aria-hidden />}
           {view === "table" && <ColumnPicker project={project} selected={visibleColumns} onToggle={toggleColumn} />}
           {view === "table" && <SortPicker project={project} sortKeys={sortKeys} onChange={changeSortKeys} />}
           {view !== "priority" && view !== "analytics" && <GroupByPicker project={project} value={grouping} onChange={changeGrouping} />}
@@ -483,110 +552,41 @@ export default function ProjectView({
             <button
               onClick={toggleStatusOrder}
               title="Inverte l'ordine degli stati in Tabella e Gantt (gli stati senza issue non vengono mostrati)"
-              className="rounded-lg border border-neutral-800 px-2 py-1.5 text-xs text-neutral-300 transition hover:border-neutral-500"
+              className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-neutral-800 px-2 py-1.5 text-xs text-neutral-300 transition hover:border-neutral-500"
             >
-              {statusOrderReversed ? "↑ Stati" : "↓ Stati"}
+              {statusOrderReversed ? <ArrowUp size={13} aria-hidden /> : <ArrowDown size={13} aria-hidden />} Stati
             </button>
           )}
-          <div className="flex rounded-lg border border-neutral-800 p-0.5 text-xs">
-            <button
-              onClick={() => setView("table")}
-              className={`rounded-md px-3 py-1 transition ${
-                view === "table" ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300"
-              }`}
-            >
-              Tabella
-            </button>
-            <button
-              onClick={() => setView("board")}
-              className={`rounded-md px-3 py-1 transition ${
-                view === "board" ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300"
-              }`}
-            >
-              Board
-            </button>
-            <button
-              onClick={() => setView("gantt")}
-              className={`rounded-md px-3 py-1 transition ${
-                view === "gantt" ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300"
-              }`}
-            >
-              Gantt
-            </button>
-            <button
-              onClick={() => setView("priority")}
-              title="Ordina le issue della vista corrente per punteggio di priorità"
-              className={`rounded-md px-3 py-1 transition ${
-                view === "priority" ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300"
-              }`}
-            >
-              Priorità
-            </button>
-            <button
-              onClick={() => setView("analytics")}
-              title="Grafici sulla distribuzione del lavoro nella vista corrente"
-              className={`rounded-md px-3 py-1 transition ${
-                view === "analytics" ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300"
-              }`}
-            >
-              Analisi
-            </button>
-          </div>
-          <button
-            onClick={onRefresh}
-            disabled={refreshing}
-            className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 transition hover:border-neutral-500 disabled:opacity-50"
-          >
-            {refreshing ? "Aggiorno…" : "Aggiorna"}
-          </button>
-          <button
-            onClick={() => setShowMilestones(true)}
-            title="Gestisci le milestone del repository: crea, modifica, elimina, assegna issue"
-            className="rounded-lg border border-neutral-800 px-2.5 py-1.5 text-xs text-neutral-300 transition hover:border-neutral-500"
-          >
-            🎯 Milestone
-          </button>
-          <NotificationsButton token={token} onOpen={onOpenNotifications} refreshKey={notificationsRefreshKey} />
-          <button
-            onClick={() => setShowCleanup(true)}
-            title="Seleziona issue con una query per scollegarle o eliminarle in blocco — azione separata, ad accesso volontario"
-            className="ml-1 rounded-lg border border-neutral-800 px-2 py-1.5 text-xs text-neutral-600 transition hover:border-amber-800 hover:text-amber-500"
-          >
-            🧹
-          </button>
         </div>
       </header>
 
-      <SavedViewsBar
-        views={views}
-        activeViewId={activeViewId}
-        isAllActive={isAllActive}
-        onApply={applyView}
-        onSaveNew={saveCurrentAsNewView}
-        onDelete={deleteView}
-      />
-
-      <div className="flex items-center gap-2 border-b border-neutral-800 px-8 py-2">
-        <QueryInput
-          token={token}
-          value={queryText}
-          onChange={setQueryText}
-          project={project}
-          placeholder='es. label:bug or assignee:canada87 -status:"Done"'
-          className="w-96 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-100 outline-none focus:border-indigo-500"
+      {/* Saved views (left, scroll sideways when many) and the query bar (right) share one row. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-neutral-800 px-6 py-2">
+        <SavedViewsBar
+          views={views}
+          activeViewId={activeViewId}
+          isAllActive={isAllActive}
+          onApply={applyView}
+          onSaveNew={saveCurrentAsNewView}
+          onDelete={deleteView}
+          className="min-w-0 flex-1"
         />
-        {queryText && (
-          <button onClick={() => setQueryText("")} className="text-xs text-neutral-500 hover:text-neutral-300">
-            Cancella
-          </button>
-        )}
-        <QueryWarning fields={unknownFields} />
-        <div className="rounded-lg border border-neutral-800 bg-neutral-900/50 px-3 py-1.5 text-[11px] leading-relaxed text-neutral-500">
-          <span className="text-neutral-300">chiave:valore</span> · spazio = and · <span className="text-neutral-300">or</span> = oppure ·{" "}
-          <span className="text-neutral-300">-</span>nega · (raggruppa) · "virgolette" per spazi (anche nel nome campo, es.{" "}
-          <span className="text-neutral-300">"target date":&gt;today</span>) ·{" "}
-          <span className="text-neutral-300">campo:&gt;valore</span> confronto su date/numeri ({">"}, {"<"}, {">="}, {"<="}) ·{" "}
-          <span className="text-neutral-300">today</span>/<span className="text-neutral-300">today+7</span> per date relative
+        <div className="flex items-center gap-2">
+          <QueryWarning fields={unknownFields} />
+          <QueryInput
+            token={token}
+            value={queryText}
+            onChange={setQueryText}
+            project={project}
+            placeholder='Filtra: label:bug or assignee:canada87 -status:"Done"'
+            className="w-80 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-100 outline-none focus:border-indigo-500 xl:w-[28rem]"
+          />
+          {queryText && (
+            <button onClick={() => setQueryText("")} className="whitespace-nowrap text-xs text-neutral-500 hover:text-neutral-300">
+              Cancella
+            </button>
+          )}
+          <QuerySyntaxHelp />
         </div>
       </div>
 

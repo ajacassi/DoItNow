@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { X } from "lucide-react";
 import { createRepoLabel, updateRepoLabel, deleteRepoLabel, GithubApiError, type RepoLabel } from "../lib/github";
 import LabelChip from "./LabelChip";
+import { useDialog } from "../lib/useDialog";
 
 interface Props {
   token: string;
@@ -19,6 +21,7 @@ function isValidHexColor(value: string): boolean {
 }
 
 export default function LabelManager({ token, repositoryId, labels, onClose, onCreated, onUpdated, onDeleted }: Props) {
+  const dialogRef = useDialog(onClose);
   const [editing, setEditing] = useState<RepoLabel | "new" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<RepoLabel | null>(null);
   const [name, setName] = useState("");
@@ -83,6 +86,7 @@ export default function LabelManager({ token, repositoryId, labels, onClose, onC
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60" onClick={onClose}>
       <div
+        ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Label della repo"
         className="flex max-h-[80vh] w-full max-w-md flex-col rounded-xl border border-neutral-800 bg-neutral-950 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -90,8 +94,8 @@ export default function LabelManager({ token, repositoryId, labels, onClose, onC
           <h2 className="text-sm font-semibold text-neutral-100">
             {confirmDelete ? "Eliminare la label?" : isForm ? (editing === "new" ? "Nuova label" : "Modifica label") : "Label della repo"}
           </h2>
-          <button onClick={onClose} className="text-neutral-500 hover:text-neutral-200">
-            ✕
+          <button onClick={onClose} aria-label="Chiudi" title="Chiudi" className="-m-1 rounded p-1 text-neutral-500 hover:text-neutral-200">
+            <X size={16} aria-hidden />
           </button>
         </div>
 
@@ -131,13 +135,13 @@ export default function LabelManager({ token, repositoryId, labels, onClose, onC
                     <button onClick={() => startEdit(l)} className="text-xs text-neutral-500 hover:text-neutral-200">
                       Modifica
                     </button>
-                    <button onClick={() => setConfirmDelete(l)} className="text-xs text-neutral-600 hover:text-red-400">
+                    <button onClick={() => setConfirmDelete(l)} className="text-xs text-subtle hover:text-red-400">
                       Elimina
                     </button>
                   </div>
                 </div>
               ))}
-              {labels.length === 0 && <p className="px-1.5 py-1 text-xs text-neutral-600">Nessuna label in questa repo.</p>}
+              {labels.length === 0 && <p className="px-1.5 py-1 text-xs text-subtle">Nessuna label in questa repo.</p>}
             </div>
             <div className="border-t border-neutral-800 p-3">
               <button

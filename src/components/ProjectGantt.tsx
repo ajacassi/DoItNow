@@ -239,7 +239,7 @@ export default function ProjectGantt({ project, grouping, reversed, onOpenItem }
                       <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`} />
                       {status === ALL_GROUP ? "Tutte le issue" : status}
                     </span>
-                    <span className="shrink-0 text-[11px] text-neutral-600" title="con date impostate / totale">
+                    <span className="shrink-0 text-[11px] text-subtle" title="con date impostate / totale">
                       {withDates}/{rows.length}
                     </span>
                   </button>
@@ -254,7 +254,7 @@ export default function ProjectGantt({ project, grouping, reversed, onOpenItem }
                         >
                           <ChevronIcon open={!collapsed[row.key]} />
                           <span className="truncate text-[11px] font-medium text-neutral-400">{row.label}</span>
-                          <span className="shrink-0 text-[11px] text-neutral-700">{row.count}</span>
+                          <span className="shrink-0 text-[11px] text-subtle">{row.count}</span>
                         </button>
                       ) : (
                         <button
@@ -264,7 +264,7 @@ export default function ProjectGantt({ project, grouping, reversed, onOpenItem }
                           title={`${row.item.number != null ? `#${row.item.number} ` : ""}${row.item.title}${row.start ? "" : " — nessuna data impostata"}`}
                           className={`flex w-full items-center truncate border-b border-neutral-800/40 px-2 text-left text-xs hover:text-neutral-100 hover:underline ${
                             innerKey === "none" ? "pl-7" : "pl-9"
-                          } ${row.start ? "text-neutral-300" : "text-neutral-600"} ${bandBg}`}
+                          } ${row.start ? "text-neutral-300" : "text-subtle"} ${bandBg}`}
                         >
                           {row.item.number != null && <span className="mr-1.5 shrink-0 text-neutral-500">#{row.item.number}</span>}
                           <span className="min-w-0 truncate">{row.item.title}</span>

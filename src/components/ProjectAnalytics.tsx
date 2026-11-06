@@ -1,6 +1,8 @@
 import { useMemo, useState, type ReactNode } from "react";
 import type { ProjectDetail, ProjectItem } from "../lib/github";
 import { colorStyle } from "../lib/colors";
+import { useDialog } from "../lib/useDialog";
+import { Hourglass, OctagonX, SlidersHorizontal, TriangleAlert, X } from "lucide-react";
 import type { PriorityConfig } from "../lib/priority";
 import { ACTIVE_PHASES, PHASE_HINT, PHASE_LABEL, phaseFor, type Phase } from "../lib/phases";
 import {
@@ -63,13 +65,13 @@ function Swatch({ color, round }: { color: string; round?: boolean }) {
   return <span className={`inline-block h-2.5 w-2.5 shrink-0 ${round ? "rounded-full" : "rounded-sm"}`} style={{ background: color }} />;
 }
 
-function Legend({ items }: { items: { label: string; color: string; icon?: string }[] }) {
+function Legend({ items }: { items: { label: string; color: string; icon?: ReactNode }[] }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-neutral-400">
       {items.map((i) => (
         <span key={i.label} className="flex items-center gap-1.5">
           <Swatch color={i.color} />
-          {i.icon && <span aria-hidden>{i.icon}</span>}
+          {i.icon && <span aria-hidden className="flex">{i.icon}</span>}
           {i.label}
         </span>
       ))}
@@ -149,7 +151,7 @@ function Card({
 }
 
 function Empty({ text }: { text: string }) {
-  return <p className="py-6 text-center text-xs text-neutral-600">{text}</p>;
+  return <p className="py-6 text-center text-xs text-subtle">{text}</p>;
 }
 
 function PersonLabel({ p, selected, onSelect }: { p: { key: string; login: string | null; avatarUrl: string | null }; selected: boolean; onSelect: () => void }) {
@@ -250,13 +252,13 @@ function Dot({
 
 function Axis({ ticks, unit }: { ticks: { pct: number; label: string }[]; unit?: string }) {
   return (
-    <div className="relative mt-1 h-4 text-[10px] tabular-nums text-neutral-600">
+    <div className="relative mt-1 h-4 text-[10px] tabular-nums text-subtle">
       {ticks.map((t) => (
         <span key={t.pct} className="absolute -translate-x-1/2" style={{ left: `${t.pct}%` }}>
           {t.label}
         </span>
       ))}
-      {unit && <span className="absolute right-0 top-3.5 text-neutral-600">{unit}</span>}
+      {unit && <span className="absolute right-0 top-3.5 text-subtle">{unit}</span>}
     </div>
   );
 }
@@ -289,7 +291,7 @@ function Columns({
   return (
     <div>
       <div className="flex gap-2">
-        <div className="relative w-6 shrink-0 text-right text-[10px] tabular-nums text-neutral-600" style={{ height }}>
+        <div className="relative w-6 shrink-0 text-right text-[10px] tabular-nums text-subtle" style={{ height }}>
           {ticks.map((t) => (
             <span key={t} className="absolute right-0 -translate-y-1/2" style={{ top: `${100 - (t / max) * 100}%` }}>
               {fmt(t)}
@@ -324,7 +326,7 @@ function Columns({
       </div>
       <div className="ml-8 mt-1 flex gap-[2px]">
         {groups.map((g) => (
-          <span key={g.key} className={`flex-1 truncate text-center text-[10px] tabular-nums ${g.highlight ? "text-neutral-300" : "text-neutral-600"}`}>
+          <span key={g.key} className={`flex-1 truncate text-center text-[10px] tabular-nums ${g.highlight ? "text-neutral-300" : "text-subtle"}`}>
             {g.label}
           </span>
         ))}
@@ -360,10 +362,16 @@ function PhaseEditor({
   onChange: (p: Record<string, Phase>) => void;
   onClose: () => void;
 }) {
+  const dialogRef = useDialog(onClose);
   return (
     <>
       <div className="fixed inset-0 z-20" onClick={onClose} />
-      <div className="absolute right-0 top-9 z-30 w-[26rem] rounded-xl border border-neutral-700 bg-neutral-900 p-4 shadow-2xl">
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-label="Fasi del lavoro"
+        className="absolute right-0 top-9 z-30 w-[26rem] rounded-xl border border-neutral-700 bg-neutral-900 p-4 shadow-2xl">
         <h3 className="text-sm font-semibold">Fasi del lavoro</h3>
         <p className="mb-3 mt-0.5 text-[11px] leading-relaxed text-neutral-500">
           Ogni progetto ha stati diversi: qui decidi in quale fase cade ciascuno. Le issue chiuse sono sempre escluse. Vale solo per questo
@@ -399,7 +407,7 @@ function PhaseEditor({
             );
           })}
         </div>
-        <div className="mt-3 space-y-0.5 border-t border-neutral-800 pt-2 text-[10px] text-neutral-600">
+        <div className="mt-3 space-y-0.5 border-t border-neutral-800 pt-2 text-[10px] text-subtle">
           {(["todo", "doing", "closing", "out"] as Phase[]).map((p) => (
             <div key={p}>
               <span className="text-neutral-400">{PHASE_LABEL[p]}</span>: {PHASE_HINT[p]}
@@ -482,18 +490,23 @@ export default function ProjectAnalytics({ project, config, phases, onChangePhas
           {personLabel && (
             <>
               {" · "}
-              <button onClick={() => setPerson(null)} className="rounded-full bg-indigo-600/20 px-2 py-0.5 text-indigo-300 hover:bg-indigo-600/30">
-                solo {personLabel} ✕
+              <button
+                onClick={() => setPerson(null)}
+                aria-label={`Rimuovi il filtro: solo ${personLabel}`}
+                className="inline-flex items-center gap-1 rounded-full bg-indigo-600/20 px-2 py-0.5 text-indigo-300 hover:bg-indigo-600/30"
+              >
+                solo {personLabel} <X size={12} aria-hidden />
               </button>
             </>
           )}
         </span>
-        <span className="text-neutral-600">Clicca una persona per filtrare tutti i grafici.</span>
+        <span className="text-subtle">Clicca una persona per filtrare tutti i grafici.</span>
         <button
           onClick={() => setShowPhases((v) => !v)}
-          className="ml-auto rounded-lg border border-neutral-800 px-2.5 py-1 text-neutral-300 transition hover:border-neutral-500"
+          aria-expanded={showPhases}
+          className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-neutral-800 px-2.5 py-1 text-neutral-300 transition hover:border-neutral-500"
         >
-          ⚙ Fasi degli stati
+          <SlidersHorizontal size={13} aria-hidden /> Fasi degli stati
         </button>
         {showPhases && <PhaseEditor project={project} phases={phases} onChange={onChangePhases} onClose={() => setShowPhases(false)} />}
       </div>
@@ -520,7 +533,7 @@ export default function ProjectAnalytics({ project, config, phases, onChangePhas
                 <button
                   key={m}
                   disabled={m === "effort" && !a.hasEffort}
-                  title={m === "effort" && !a.hasEffort ? "Imposta un campo effort in ⚙ Configura priorità" : undefined}
+                  title={m === "effort" && !a.hasEffort ? "Imposta un campo effort in Configura priorità" : undefined}
                   onClick={() => setMeasure(m)}
                   className={`rounded px-2 py-0.5 disabled:opacity-40 ${effMeasure === m ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300"}`}
                 >
@@ -633,7 +646,7 @@ export default function ProjectAnalytics({ project, config, phases, onChangePhas
                 <Legend
                   items={[
                     { label: `Sotto ${URGENT_SCORE}`, color: "var(--viz-s1)" },
-                    { label: `${URGENT_SCORE} o più (molto urgente)`, color: "var(--viz-critical)", icon: "⚠" },
+                    { label: `${URGENT_SCORE} o più (molto urgente)`, color: "var(--viz-critical)", icon: <TriangleAlert size={12} /> },
                   ]}
                 />
               </div>
@@ -657,9 +670,9 @@ export default function ProjectAnalytics({ project, config, phases, onChangePhas
               <div className="mb-3">
                 <Legend
                   items={[
-                    { label: "Scadute", color: "var(--viz-critical)", icon: "⛔" },
-                    { label: "Entro 7 gg", color: "var(--viz-serious)", icon: "⚠" },
-                    { label: "Entro 30 gg", color: "var(--viz-warning)", icon: "⏳" },
+                    { label: "Scadute", color: "var(--viz-critical)", icon: <OctagonX size={12} /> },
+                    { label: "Entro 7 gg", color: "var(--viz-serious)", icon: <TriangleAlert size={12} /> },
+                    { label: "Entro 30 gg", color: "var(--viz-warning)", icon: <Hourglass size={12} /> },
                   ]}
                 />
               </div>
@@ -885,7 +898,7 @@ export default function ProjectAnalytics({ project, config, phases, onChangePhas
                 <div className="flex-1">
                   <Axis ticks={[0, 50, 100].map((t) => ({ pct: t, label: fmt(Math.round((ageMax * t) / 100)) }))} />
                 </div>
-                <span className="w-24 shrink-0 text-right text-[10px] text-neutral-600">giorni</span>
+                <span className="w-24 shrink-0 text-right text-[10px] text-subtle">giorni</span>
               </div>
             </div>
           )}

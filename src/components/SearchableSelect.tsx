@@ -64,6 +64,7 @@ export default function SearchableSelect({ options, value, onChange, placeholder
             onBlur={() => setTimeout(() => setOpen(false), 150)}
             onKeyDown={(e) => {
               if (e.key === "Escape") {
+                e.preventDefault();
                 setOpen(false);
               } else if (e.key === "ArrowDown") {
                 e.preventDefault();
@@ -80,7 +81,7 @@ export default function SearchableSelect({ options, value, onChange, placeholder
             className="block w-full border-b border-neutral-800 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100 outline-none"
           />
           <div className="max-h-52 overflow-y-auto">
-            {filtered.length === 0 && <p className="px-2 py-1.5 text-xs text-neutral-600">Nessun risultato.</p>}
+            {filtered.length === 0 && <p className="px-2 py-1.5 text-xs text-subtle">Nessun risultato.</p>}
             {filtered.map((o, i) => (
               <button
                 key={o.value}

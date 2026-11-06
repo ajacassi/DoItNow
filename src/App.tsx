@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Settings } from "lucide-react";
 import TokenScreen from "./components/TokenScreen";
 import ProjectPicker from "./components/ProjectPicker";
 import ProjectView from "./components/ProjectView";
@@ -303,9 +304,10 @@ export default function App() {
       <button
         onClick={() => setShowSettings(true)}
         title="Impostazioni"
-        className="fixed bottom-4 right-24 z-[100] rounded-full border border-neutral-800 bg-neutral-900/90 px-3 py-2 text-xs text-neutral-300 shadow-lg backdrop-blur transition hover:border-neutral-600 hover:text-neutral-100"
+        aria-label="Impostazioni"
+        className="fixed bottom-4 right-24 z-[100] flex items-center rounded-full border border-neutral-800 bg-neutral-900/90 px-3 py-2 text-xs text-neutral-300 shadow-lg backdrop-blur transition hover:border-neutral-600 hover:text-neutral-100"
       >
-        ⚙️
+        <Settings size={16} aria-hidden />
       </button>
       {showSettings && (
         <SettingsPanel

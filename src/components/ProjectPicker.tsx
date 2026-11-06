@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Star } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
 import type { ProjectSummary } from "../lib/github";
 import { getShowClosedProjects, setShowClosedProjects, type DefaultProject } from "../lib/store";
@@ -175,11 +176,19 @@ export default function ProjectPicker({
                       ? "Progetto predefinito: si apre da solo all'avvio — clicca per toglierlo"
                       : "Apri questo progetto direttamente all'avvio"
                   }
-                  className={`absolute bottom-2.5 right-3 text-xs transition ${
-                    defaultProject?.number === p.number ? "text-amber-400 hover:text-amber-300" : "text-neutral-600 hover:text-neutral-300"
+                  className={`absolute bottom-2.5 right-3 inline-flex items-center gap-1 text-xs transition ${
+                    defaultProject?.number === p.number ? "text-amber-400 hover:text-amber-300" : "text-subtle hover:text-neutral-300"
                   }`}
                 >
-                  {defaultProject?.number === p.number ? "★ Predefinito" : "☆ Apri all'avvio"}
+                  {defaultProject?.number === p.number ? (
+                    <>
+                      <Star size={12} fill="currentColor" aria-hidden /> Predefinito
+                    </>
+                  ) : (
+                    <>
+                      <Star size={12} aria-hidden /> Apri all'avvio
+                    </>
+                  )}
                 </button>
               </li>
             ))}

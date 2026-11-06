@@ -7,6 +7,7 @@ import {
   type NotificationItem,
 } from "../lib/github";
 import ExternalLink from "./ExternalLink";
+import { useDialog } from "../lib/useDialog";
 
 interface Props {
   token: string;
@@ -66,6 +67,7 @@ function timeAgo(iso: string): string {
 }
 
 export default function NotificationsInbox({ token, onClose }: Props) {
+  const dialogRef = useDialog(onClose);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -127,7 +129,7 @@ export default function NotificationsInbox({ token, onClose }: Props) {
   const unreadCount = items.filter((n) => n.unread).length;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950 text-neutral-100">
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Notifiche" className="fixed inset-0 z-50 flex flex-col bg-neutral-950 text-neutral-100">
       <header className="flex items-center justify-between border-b border-neutral-800 px-8 py-4">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Notifiche</h1>
@@ -167,7 +169,7 @@ export default function NotificationsInbox({ token, onClose }: Props) {
         {loading ? (
           <p className="text-sm text-neutral-500">Carico…</p>
         ) : filtered.length === 0 ? (
-          <p className="text-sm text-neutral-600">Nessuna notifica{filter !== "all" ? " in questa categoria" : ""}.</p>
+          <p className="text-sm text-subtle">Nessuna notifica{filter !== "all" ? " in questa categoria" : ""}.</p>
         ) : (
           <div className="overflow-hidden rounded-lg border border-neutral-800">
             {filtered.map((n) => (
@@ -188,13 +190,13 @@ export default function NotificationsInbox({ token, onClose }: Props) {
                     n.title
                   )}
                 </span>
-                <span className="shrink-0 text-xs text-neutral-600">
+                <span className="shrink-0 text-xs text-subtle">
                   {n.repositoryFullName}
                   {n.number != null ? ` #${n.number}` : ""}
                 </span>
-                <span className="shrink-0 text-xs text-neutral-600">{timeAgo(n.updatedAt)}</span>
+                <span className="shrink-0 text-xs text-subtle">{timeAgo(n.updatedAt)}</span>
                 {n.unread && (
-                  <button onClick={() => markRead(n)} className="shrink-0 text-xs text-neutral-600 hover:text-neutral-300">
+                  <button onClick={() => markRead(n)} className="shrink-0 text-xs text-subtle hover:text-neutral-300">
                     Segna letta
                   </button>
                 )}

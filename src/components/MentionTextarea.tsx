@@ -125,6 +125,7 @@ export default function MentionTextarea({
       if (trigger === "@") selectUser(userCandidates[activeIndex].login);
       else selectIssue(issueCandidates[activeIndex].number);
     } else if (e.key === "Escape") {
+      e.preventDefault();
       setTrigger(null);
       setQuery(null);
       setMentionStart(null);

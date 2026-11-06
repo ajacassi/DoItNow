@@ -5,7 +5,8 @@ import { parseIssueQuery, matchesIssueQuery, unknownQueryFields } from "../lib/q
 import QueryWarning from "./QueryWarning";
 import QueryInput from "./QueryInput";
 import LabelChip from "./LabelChip";
-import ExternalLink from "./ExternalLink";
+import { GitHubIconLink } from "./ExternalLink";
+import { useDialog } from "../lib/useDialog";
 
 interface Props {
   token: string;
@@ -22,6 +23,7 @@ export default function ProjectCleanup({ token, project, onClose, onItemRemoved 
   const [confirmAction, setConfirmAction] = useState<BulkAction | null>(null);
   const [confirmText, setConfirmText] = useState("");
   const [busy, setBusy] = useState(false);
+  const dialogRef = useDialog(onClose, !busy);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [failures, setFailures] = useState<string[]>([]);
 
@@ -112,7 +114,7 @@ export default function ProjectCleanup({ token, project, onClose, onItemRemoved 
   const canConfirmDelete = confirmAction === "delete" ? confirmText.trim().toUpperCase() === confirmWord : true;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950 text-neutral-100">
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Pulizia progetto" className="fixed inset-0 z-50 flex flex-col bg-neutral-950 text-neutral-100">
       <header className="flex items-center justify-between border-b border-amber-900/40 bg-amber-950/10 px-8 py-4">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Pulizia progetto</h1>
@@ -151,11 +153,11 @@ export default function ProjectCleanup({ token, project, onClose, onItemRemoved 
 
       <div className="flex min-h-0 flex-1 flex-col px-8 py-4">
         {!queryText.trim() ? (
-          <div className="flex flex-1 items-center justify-center text-sm text-neutral-600">
+          <div className="flex flex-1 items-center justify-center text-sm text-subtle">
             Scrivi una query per vedere le issue corrispondenti — nessuna viene mostrata finché non ne scrivi una.
           </div>
         ) : matched.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center text-sm text-neutral-600">Nessuna issue corrisponde a questa query.</div>
+          <div className="flex flex-1 items-center justify-center text-sm text-subtle">Nessuna issue corrisponde a questa query.</div>
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-neutral-800">
             <div className="sticky top-0 flex items-center gap-3 border-b border-neutral-800 bg-neutral-900/90 px-3 py-2 text-xs text-neutral-500">
@@ -178,16 +180,14 @@ export default function ProjectCleanup({ token, project, onClose, onItemRemoved 
                 {item.labels.map((l) => (
                   <LabelChip key={l.name} name={l.name} color={l.color} />
                 ))}
-                <span className="shrink-0 text-xs text-neutral-600">
+                <span className="shrink-0 text-xs text-subtle">
                   {item.repositoryOwner}/{item.repository} #{item.number}
                 </span>
-                <span className="shrink-0 text-xs text-neutral-600">
+                <span className="shrink-0 text-xs text-subtle">
                   {item.closedAt ? `chiusa ${new Date(item.closedAt).toLocaleDateString("it-IT")}` : "—"}
                 </span>
                 {item.url && (
-                  <ExternalLink href={item.url} className="shrink-0 text-xs text-neutral-600 hover:text-neutral-400">
-                    ↗
-                  </ExternalLink>
+                  <GitHubIconLink href={item.url} className="text-subtle hover:text-neutral-400" />
                 )}
               </div>
             ))}
@@ -226,11 +226,11 @@ export default function ProjectCleanup({ token, project, onClose, onItemRemoved 
       )}
 
       {confirmAction && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70" onClick={() => !busy && setConfirmAction(null)}>
-          <div
-            className="w-full max-w-md rounded-xl border border-neutral-800 bg-neutral-950 p-5 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <ConfirmFrame
+          label={confirmAction === "delete" ? "Conferma eliminazione" : "Conferma scollegamento"}
+          busy={busy}
+          onCancel={() => setConfirmAction(null)}
+        >
             {confirmAction === "unlink" ? (
               <>
                 <h2 className="text-sm font-semibold text-neutral-100">Scollegare {selectedItems.length} issue dal progetto?</h2>
@@ -274,9 +274,28 @@ export default function ProjectCleanup({ token, project, onClose, onItemRemoved 
                 {busy ? "In corso…" : confirmAction === "delete" ? "Elimina definitivamente" : "Scollega"}
               </button>
             </div>
-          </div>
-        </div>
+        </ConfirmFrame>
       )}
+    </div>
+  );
+}
+
+/** Backdrop + box of the bulk-action confirmation, closable with Esc or a backdrop click unless the action is running. */
+function ConfirmFrame({ label, busy, onCancel, children }: { label: string; busy: boolean; onCancel: () => void; children: React.ReactNode }) {
+  const dialogRef = useDialog(onCancel, !busy);
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70" onClick={() => !busy && onCancel()}>
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="alertdialog"
+        aria-modal="true"
+        aria-label={label}
+        className="w-full max-w-md rounded-xl border border-neutral-800 bg-neutral-950 p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
     </div>
   );
 }

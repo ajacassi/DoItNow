@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ArrowUpRight, X } from "lucide-react";
 import {
   fetchIssueDetail,
   updateIssueTitle,
@@ -43,6 +44,7 @@ import ExternalLink from "./ExternalLink";
 import LabelManager from "./LabelManager";
 import FieldOptionsManager from "./FieldOptionsManager";
 import SearchableSelect from "./SearchableSelect";
+import { useDialog } from "../lib/useDialog";
 
 interface Props {
   token: string;
@@ -69,6 +71,7 @@ export default function IssueDetailPanel({
   onFieldOptionsChanged,
   onOpenIssue,
 }: Props) {
+  const dialogRef = useDialog(onClose);
   const [detail, setDetail] = useState<IssueDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -394,6 +397,7 @@ export default function IssueDetailPanel({
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/50" onClick={onClose}>
       <div
+        ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`Issue #${issueRef.number}`}
         className="flex h-full w-full max-w-xl flex-col overflow-y-auto border-l border-neutral-800 bg-neutral-950 text-neutral-100 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -403,12 +407,12 @@ export default function IssueDetailPanel({
           </span>
           <div className="flex items-center gap-3">
             {detail?.url && (
-              <ExternalLink href={detail.url} className="text-xs text-neutral-500 hover:text-neutral-300">
-                Apri su GitHub ↗
+              <ExternalLink href={detail.url} className="inline-flex items-center gap-0.5 text-xs text-neutral-500 hover:text-neutral-300">
+                Apri su GitHub <ArrowUpRight size={13} aria-hidden />
               </ExternalLink>
             )}
-            <button onClick={onClose} className="text-neutral-500 hover:text-neutral-200">
-              ✕
+            <button onClick={onClose} aria-label="Chiudi" title="Chiudi" className="-m-1 rounded p-1 text-neutral-500 hover:text-neutral-200">
+              <X size={16} aria-hidden />
             </button>
           </div>
         </div>
@@ -457,7 +461,7 @@ export default function IssueDetailPanel({
             </div>
 
             {!projectItem && (
-              <p className="text-xs text-neutral-600">Questa issue non è nella tabella del progetto corrente.</p>
+              <p className="text-xs text-subtle">Questa issue non è nella tabella del progetto corrente.</p>
             )}
 
             <section>
@@ -496,7 +500,7 @@ export default function IssueDetailPanel({
               ) : (
                 <button
                   onClick={() => setEditingBody(true)}
-                  className="w-full rounded-lg border border-dashed border-neutral-800 px-3 py-2 text-left text-sm text-neutral-600"
+                  className="w-full rounded-lg border border-dashed border-neutral-800 px-3 py-2 text-left text-sm text-subtle"
                 >
                   Nessuna descrizione — clicca per aggiungerne una
                 </button>
@@ -582,7 +586,7 @@ export default function IssueDetailPanel({
                               <button
                                 type="button"
                                 onClick={() => setManagingOptionsField({ id: f.id, name: f.name, kind: "SINGLE_SELECT" })}
-                                className="text-neutral-600 hover:text-neutral-300"
+                                className="text-subtle hover:text-neutral-300"
                               >
                                 Gestisci opzioni…
                               </button>
@@ -615,13 +619,13 @@ export default function IssueDetailPanel({
                             <button
                               type="button"
                               onClick={() => setManagingOptionsField({ id: f.id, name: f.name, kind: "MULTI_SELECT" })}
-                              className="text-neutral-600 hover:text-neutral-300"
+                              className="text-subtle hover:text-neutral-300"
                             >
                               Gestisci opzioni…
                             </button>
                           </div>
                           <div className="mt-1 flex flex-wrap gap-1.5 rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5">
-                            {options.length === 0 && <span className="text-neutral-700">—</span>}
+                            {options.length === 0 && <span className="text-subtle">—</span>}
                             {options.map((o) => {
                               const active = selectedNames.has(o.name);
                               const style = colorStyle(o.color);
@@ -631,7 +635,7 @@ export default function IssueDetailPanel({
                                   type="button"
                                   onClick={() => toggle(o)}
                                   className={`rounded-full border px-2 py-0.5 text-[11px] transition ${
-                                    active ? `${style.bg} ${style.text} ${style.border}` : "border-neutral-800 text-neutral-600 hover:border-neutral-600"
+                                    active ? `${style.bg} ${style.text} ${style.border}` : "border-neutral-800 text-subtle hover:border-neutral-600"
                                   }`}
                                 >
                                   {o.name}
@@ -671,8 +675,8 @@ export default function IssueDetailPanel({
                     if (!KNOWN_FIELD_TYPES.has(f.dataType)) {
                       return (
                         <div key={f.id} className="text-xs text-neutral-500">
-                          {f.name} <span className="text-neutral-700">({f.dataType}, non ancora supportato)</span>
-                          <p className="mt-1 rounded-lg border border-dashed border-neutral-800 px-2 py-1.5 text-sm text-neutral-600">
+                          {f.name} <span className="text-subtle">({f.dataType}, non ancora supportato)</span>
+                          <p className="mt-1 rounded-lg border border-dashed border-neutral-800 px-2 py-1.5 text-sm text-subtle">
                             {value && value.type === "text" ? value.text : "—"}
                           </p>
                         </div>

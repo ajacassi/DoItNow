@@ -1,10 +1,11 @@
 import { Fragment, useMemo, useState } from "react";
+import { SlidersHorizontal, Target } from "lucide-react";
 import type { ProjectDetail, ProjectItem } from "../lib/github";
 import { activeBlockers, activeBlocking } from "../lib/github";
 import { colorStyle } from "../lib/colors";
 import { formatDaysLeft, scoreItems, type PriorityConfig, type ScoredItem } from "../lib/priority";
 import LabelChip from "./LabelChip";
-import ExternalLink from "./ExternalLink";
+import { GitHubIconLink } from "./ExternalLink";
 
 interface Props {
   project: ProjectDetail;
@@ -32,7 +33,7 @@ function Breakdown({ s }: { s: ScoredItem }) {
   return (
     <div className="space-y-1 text-[11px] text-neutral-400">
       <table className="w-full max-w-2xl">
-        <thead className="text-neutral-600">
+        <thead className="text-subtle">
           <tr>
             <th className="py-0.5 text-left font-normal">Fattore</th>
             <th className="py-0.5 text-left font-normal">Origine</th>
@@ -45,7 +46,7 @@ function Breakdown({ s }: { s: ScoredItem }) {
           {s.factors.map((f) => {
             const ignored = f.value === null || f.weight <= 0;
             return (
-              <tr key={f.key} className={ignored ? "text-neutral-600 line-through" : ""}>
+              <tr key={f.key} className={ignored ? "text-subtle line-through" : ""}>
                 <td className="py-0.5 pr-3">{f.label}</td>
                 <td className={`py-0.5 pr-3 ${f.defaulted ? "italic text-amber-500/80" : ""}`}>{f.detail}</td>
                 <td className="py-0.5 text-right tabular-nums">{f.value === null ? "—" : fmt(f.value)}</td>
@@ -120,9 +121,9 @@ export default function ProjectPriority({ project, config, configSaved, onOpenIt
         )}
         <button
           onClick={onEditConfig}
-          className="ml-auto rounded-lg border border-neutral-800 px-2.5 py-1 text-neutral-300 transition hover:border-neutral-500"
+          className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-neutral-800 px-2.5 py-1 text-neutral-300 transition hover:border-neutral-500"
         >
-          ⚙ Configura priorità
+          <SlidersHorizontal size={13} aria-hidden /> Configura priorità
         </button>
       </div>
 
@@ -158,7 +159,7 @@ export default function ProjectPriority({ project, config, configSaved, onOpenIt
             return (
               <Fragment key={item.id}>
                 <tr className="group hover:bg-neutral-900/60">
-                  <td className="border-b border-neutral-900 px-2 py-2 text-xs tabular-nums text-neutral-600">{idx + 1}</td>
+                  <td className="border-b border-neutral-900 px-2 py-2 text-xs tabular-nums text-subtle">{idx + 1}</td>
                   <td className="border-b border-neutral-900 px-2 py-2">
                     <button
                       onClick={() => setOpenId(open ? null : item.id)}
@@ -169,7 +170,7 @@ export default function ProjectPriority({ project, config, configSaved, onOpenIt
                       <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-800">
                         <span className={`block h-full ${scoreTone(s.score)}`} style={{ width: `${Math.min(100, s.score)}%` }} />
                       </span>
-                      <span className="text-[10px] text-neutral-600">{open ? "▾" : "▸"}</span>
+                      <span className="text-[10px] text-subtle">{open ? "▾" : "▸"}</span>
                     </button>
                   </td>
                   <td className="border-b border-neutral-900 px-2 py-2">
@@ -192,12 +193,10 @@ export default function ProjectPriority({ project, config, configSaved, onOpenIt
                         <LabelChip key={l.name} name={l.name} color={l.color} />
                       ))}
                       {item.url && (
-                        <ExternalLink href={item.url} className="shrink-0 text-xs text-neutral-600 opacity-0 hover:text-neutral-400 group-hover:opacity-100">
-                          ↗
-                        </ExternalLink>
+                        <GitHubIconLink href={item.url} className="text-subtle opacity-0 hover:text-neutral-400 group-hover:opacity-100 focus-visible:opacity-100" />
                       )}
                     </div>
-                    {parent && <div className="mt-0.5 truncate text-[11px] text-neutral-600">sotto #{parent.number} {parent.title}</div>}
+                    {parent && <div className="mt-0.5 truncate text-[11px] text-subtle">sotto #{parent.number} {parent.title}</div>}
                   </td>
                   <td className="border-b border-neutral-900 px-2 py-2">
                     <span className={`inline-block max-w-full truncate rounded-full border px-2 py-0.5 text-[11px] ${st.bg} ${st.text} ${st.border}`}>
@@ -205,27 +204,27 @@ export default function ProjectPriority({ project, config, configSaved, onOpenIt
                     </span>
                   </td>
                   <td className="border-b border-neutral-900 px-2 py-2 text-xs text-neutral-300">
-                    {s.criticality ?? <span className="text-neutral-700">—</span>}
+                    {s.criticality ?? <span className="text-subtle">—</span>}
                   </td>
                   <td className="border-b border-neutral-900 px-2 py-2 text-xs">
                     {s.dueDate ? (
                       <div title={s.dueSource === "milestone" ? `dalla milestone "${item.milestone?.title}"` : undefined}>
                         <span className="tabular-nums text-neutral-300">{new Date(s.dueDate.slice(0, 10) + "T00:00").toLocaleDateString("it-IT")}</span>
-                        {s.dueSource === "milestone" && <span className="ml-1 text-neutral-600">🎯</span>}
+                        {s.dueSource === "milestone" && <Target size={12} className="ml-1 inline align-[-1px] text-subtle" aria-label="dalla milestone" />}
                         <div className={`text-[11px] ${s.daysLeft! < 0 ? "text-red-400" : s.daysLeft! <= 3 ? "text-amber-400" : "text-neutral-500"}`}>
                           {formatDaysLeft(s.daysLeft!)}
                         </div>
                       </div>
                     ) : (
-                      <span className="text-neutral-700">—</span>
+                      <span className="text-subtle">—</span>
                     )}
                   </td>
                   {showEffort && (
                     <td className="border-b border-neutral-900 px-2 py-2 text-xs tabular-nums">
                       {s.effort === null ? (
-                        <span className="text-neutral-700">—</span>
+                        <span className="text-subtle">—</span>
                       ) : (
-                        <span className={s.effortDefaulted ? "italic text-neutral-600" : "text-neutral-300"} title={s.effortDefaulted ? "mancante: usata la mediana" : undefined}>
+                        <span className={s.effortDefaulted ? "italic text-subtle" : "text-neutral-300"} title={s.effortDefaulted ? "mancante: usata la mediana" : undefined}>
                           {fmt(s.effort)}
                         </span>
                       )}
@@ -246,7 +245,7 @@ export default function ProjectPriority({ project, config, configSaved, onOpenIt
         </tbody>
       </table>
 
-      {result.ranked.length === 0 && <p className="mt-6 text-center text-sm text-neutral-600">Nessuna issue da ordinare in questa vista.</p>}
+      {result.ranked.length === 0 && <p className="mt-6 text-center text-sm text-subtle">Nessuna issue da ordinare in questa vista.</p>}
 
       {showExcluded && result.excluded.length > 0 && (
         <div className="mt-6">
@@ -258,7 +257,7 @@ export default function ProjectPriority({ project, config, configSaved, onOpenIt
                 <button onClick={() => onOpenItem(item)} className="truncate text-neutral-400 hover:underline">
                   {item.title}
                 </button>
-                <span className="text-neutral-600">— {reason}</span>
+                <span className="text-subtle">— {reason}</span>
               </li>
             ))}
           </ul>

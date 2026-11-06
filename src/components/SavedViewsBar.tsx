@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Plus, X } from "lucide-react";
 import type { SavedView } from "../lib/store";
 
 interface Props {
@@ -8,9 +9,10 @@ interface Props {
   onApply: (view: SavedView | null) => void;
   onSaveNew: (name: string) => void;
   onDelete: (id: string) => void;
+  className?: string;
 }
 
-export default function SavedViewsBar({ views, activeViewId, isAllActive, onApply, onSaveNew, onDelete }: Props) {
+export default function SavedViewsBar({ views, activeViewId, isAllActive, onApply, onSaveNew, onDelete, className = "" }: Props) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
 
@@ -22,9 +24,10 @@ export default function SavedViewsBar({ views, activeViewId, isAllActive, onAppl
   }
 
   return (
-    <div className="flex items-center gap-2 overflow-x-auto border-b border-neutral-800 px-8 py-2">
+    <div role="group" aria-label="Viste salvate" className={`flex items-center gap-2 overflow-x-auto ${className}`}>
       <button
         onClick={() => onApply(null)}
+        aria-pressed={isAllActive}
         className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition ${
           isAllActive ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300"
         }`}
@@ -41,11 +44,16 @@ export default function SavedViewsBar({ views, activeViewId, isAllActive, onAppl
               active ? "bg-indigo-600/20 text-indigo-300" : "text-neutral-500 hover:text-neutral-300"
             }`}
           >
-            <button onClick={() => onApply(v)} className="py-0.5">
+            <button onClick={() => onApply(v)} aria-pressed={active} className="whitespace-nowrap py-0.5">
               {v.name}
             </button>
-            <button onClick={() => onDelete(v.id)} title="Elimina vista" className="px-1.5 hover:text-neutral-100">
-              ×
+            <button
+              onClick={() => onDelete(v.id)}
+              title="Elimina vista"
+              aria-label={`Elimina vista ${v.name}`}
+              className="rounded-full p-1 hover:text-neutral-100"
+            >
+              <X size={12} aria-hidden />
             </button>
           </div>
         );
@@ -60,6 +68,7 @@ export default function SavedViewsBar({ views, activeViewId, isAllActive, onAppl
             onKeyDown={(e) => {
               if (e.key === "Enter") confirmAdd();
               if (e.key === "Escape") {
+                e.preventDefault();
                 setAdding(false);
                 setName("");
               }
@@ -72,8 +81,12 @@ export default function SavedViewsBar({ views, activeViewId, isAllActive, onAppl
           </button>
         </div>
       ) : (
-        <button onClick={() => setAdding(true)} className="shrink-0 text-xs text-neutral-500 hover:text-neutral-300">
-          + Vista
+        <button
+          onClick={() => setAdding(true)}
+          title="Salva filtri, query e impostazioni attuali come nuova vista"
+          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-neutral-500 hover:text-neutral-300"
+        >
+          <Plus size={12} aria-hidden /> Vista
         </button>
       )}
     </div>

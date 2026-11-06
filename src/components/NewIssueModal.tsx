@@ -34,6 +34,7 @@ import FileUploadButton from "./FileUploadButton";
 import LabelManager from "./LabelManager";
 import FieldOptionsManager from "./FieldOptionsManager";
 import SearchableSelect from "./SearchableSelect";
+import { useDialog } from "../lib/useDialog";
 
 interface Props {
   token: string;
@@ -62,6 +63,7 @@ export default function NewIssueModal({
   onCreated,
   onFieldOptionsChanged,
 }: Props) {
+  const dialogRef = useDialog(onClose);
   const [repos, setRepos] = useState<RepoSummary[]>([]);
   const [reposLoading, setReposLoading] = useState(true);
   const [repoId, setRepoId] = useState("");
@@ -255,6 +257,7 @@ export default function NewIssueModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
       <div
+        ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={isSubIssue ? "Nuova sub-issue" : "Nuova issue"}
         className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-950 p-6 text-neutral-100 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -398,7 +401,7 @@ export default function NewIssueModal({
             )}
 
             {isSubIssue && (
-              <p className="mt-4 text-[11px] text-neutral-600">
+              <p className="mt-4 text-[11px] text-subtle">
                 Le sub-issue non vengono aggiunte al progetto, quindi i suoi campi non sono impostabili qui.
               </p>
             )}
@@ -432,7 +435,7 @@ export default function NewIssueModal({
                               <button
                                 type="button"
                                 onClick={() => setManagingOptionsField({ id: f.id, name: f.name, kind: "SINGLE_SELECT" })}
-                                className="text-neutral-600 hover:text-neutral-300"
+                                className="text-subtle hover:text-neutral-300"
                               >
                                 Gestisci opzioni…
                               </button>
@@ -465,13 +468,13 @@ export default function NewIssueModal({
                             <button
                               type="button"
                               onClick={() => setManagingOptionsField({ id: f.id, name: f.name, kind: "MULTI_SELECT" })}
-                              className="text-neutral-600 hover:text-neutral-300"
+                              className="text-subtle hover:text-neutral-300"
                             >
                               Gestisci opzioni…
                             </button>
                           </div>
                           <div className="mt-1 flex flex-wrap gap-1.5 rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5">
-                            {options.length === 0 && <span className="text-neutral-700">—</span>}
+                            {options.length === 0 && <span className="text-subtle">—</span>}
                             {options.map((o) => {
                               const active = selectedIds.has(o.id);
                               const style = colorStyle(o.color);
@@ -481,7 +484,7 @@ export default function NewIssueModal({
                                   type="button"
                                   onClick={() => toggle(o.id)}
                                   className={`rounded-full border px-2 py-0.5 text-[11px] transition ${
-                                    active ? `${style.bg} ${style.text} ${style.border}` : "border-neutral-800 text-neutral-600 hover:border-neutral-600"
+                                    active ? `${style.bg} ${style.text} ${style.border}` : "border-neutral-800 text-subtle hover:border-neutral-600"
                                   }`}
                                 >
                                   {o.name}
@@ -494,8 +497,8 @@ export default function NewIssueModal({
                     }
                     if (!KNOWN_FIELD_TYPES.has(f.dataType)) {
                       return (
-                        <p key={f.id} className="text-xs text-neutral-600">
-                          {f.name} <span className="text-neutral-700">({f.dataType}, impostabile solo dopo la creazione)</span>
+                        <p key={f.id} className="text-xs text-subtle">
+                          {f.name} <span className="text-subtle">({f.dataType}, impostabile solo dopo la creazione)</span>
                         </p>
                       );
                     }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ArrowDown, ArrowUp } from "lucide-react";
 import type { ProjectDetail } from "../lib/github";
 import { availableColumns, type ColumnOption } from "../lib/columns";
 import { TITLE_COLUMN, type SortKey } from "../lib/sort";
@@ -49,8 +50,8 @@ export default function SortPicker({ project, sortKeys, onChange }: Props) {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-20 mt-1 w-64 rounded-lg border border-neutral-700 bg-neutral-900 p-1.5 shadow-xl">
-            <p className="px-2 py-1 text-[10px] uppercase tracking-wide text-neutral-600">
+          <div className="absolute left-0 z-20 mt-1 w-64 rounded-lg border border-neutral-700 bg-neutral-900 p-1.5 shadow-xl">
+            <p className="px-2 py-1 text-[10px] uppercase tracking-wide text-subtle">
               Clicca per aggiungere · di nuovo per invertire · ancora per togliere
             </p>
             {options.map((o) => {
@@ -63,9 +64,13 @@ export default function SortPicker({ project, sortKeys, onChange }: Props) {
                 >
                   <span className="truncate">{o.label}</span>
                   {active && (
-                    <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-indigo-300">
+                    <span className="flex shrink-0 items-center gap-0.5 text-xs font-medium text-indigo-300">
                       {active.rank}
-                      {active.direction === "asc" ? "↑" : "↓"}
+                      {active.direction === "asc" ? (
+                        <ArrowUp size={12} aria-label="crescente" />
+                      ) : (
+                        <ArrowDown size={12} aria-label="decrescente" />
+                      )}
                     </span>
                   )}
                 </button>

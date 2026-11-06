@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ImagePlus } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { uploadFileAttachment, GithubApiError } from "../lib/github";
@@ -80,9 +81,15 @@ export default function FileUploadButton({ token, repositoryDatabaseId, onInsert
             ? "Allega immagine o video — documenti (PDF, Word, ecc.) vanno allegati da GitHub web"
             : "Disponibile dopo aver scelto il repository"
         }
-        className="text-xs text-neutral-500 hover:text-neutral-300 disabled:opacity-40"
+        className="inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-300 disabled:opacity-40"
       >
-        {uploading ? "Carico…" : "🖼 Immagine/video"}
+        {uploading ? (
+          "Carico…"
+        ) : (
+          <>
+            <ImagePlus size={14} aria-hidden /> Immagine/video
+          </>
+        )}
       </button>
       {error && <span className="text-xs text-red-400">{error}</span>}
     </div>

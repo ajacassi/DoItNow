@@ -9,6 +9,7 @@ import {
   type ApiMeasurement,
   type ProjectSummary,
 } from "../lib/github";
+import { useDialog } from "../lib/useDialog";
 
 interface Props {
   onClose: () => void;
@@ -26,6 +27,7 @@ function formatKb(bytes: number): string {
 }
 
 export default function SettingsPanel({ onClose, token, org, projects, preferredProjectNumber }: Props) {
+  const dialogRef = useDialog(onClose);
   const [path, setPath] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -155,7 +157,7 @@ export default function SettingsPanel({ onClose, token, org, projects, preferred
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 px-4">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg border border-neutral-800 bg-neutral-950 p-5 text-neutral-100">
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Impostazioni" className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg border border-neutral-800 bg-neutral-950 p-5 text-neutral-100">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-semibold">Impostazioni</h2>
           <button onClick={onClose} className="text-xs text-neutral-500 hover:text-neutral-300">
@@ -246,7 +248,7 @@ export default function SettingsPanel({ onClose, token, org, projects, preferred
                       <tr key={g.name}>
                         <td className="py-0.5">
                           {g.name}
-                          {g.count > 1 && <span className="text-neutral-600"> ×{g.count}</span>}
+                          {g.count > 1 && <span className="text-subtle"> ×{g.count}</span>}
                         </td>
                         <td className="py-0.5 text-right tabular-nums">{g.cost}</td>
                         <td className="py-0.5 text-right tabular-nums">{g.nodes.toLocaleString("it-IT")}</td>

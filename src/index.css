@@ -2,13 +2,57 @@
 @plugin "@tailwindcss/typography";
 
 /*
+ * Text contrast (dark theme, the Tailwind defaults). Secondary text is
+ * `text-neutral-500` and tertiary text (repo names, "chiusa", empty-cell
+ * dashes, ...) is `text-subtle`; both stay at or above WCAG AA 4.5:1 on the
+ * page backdrop (neutral-950) and on panels/cards (neutral-900):
+ *   neutral-500 #949494 → 6.5:1 / 5.9:1      subtle #858585 → 5.4:1 / 4.9:1
+ * The light theme redefines both below. Borders keep using 600/700/800.
+ */
+@theme {
+  --color-neutral-500: #949494;
+  --color-subtle: #858585;
+}
+
+/*
+ * Keyboard focus: one visible ring for every control, light and dark. It is
+ * unlayered so it also wins over the `outline-none` utilities components use
+ * to drop the browser's default ring. Text fields draw it over their own
+ * border; dialog containers (focused programmatically, tabIndex=-1) don't.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-indigo-400);
+  outline-offset: 2px;
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[contenteditable]:focus-visible {
+  outline-offset: -1px;
+}
+[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
  * "Light" theme (ZenHub-inspired) — overrides the same Tailwind `--color-*`
  * variables every component already renders through, so no component needs
  * to change. Written unlayered (outside @layer) so it always wins over
  * Tailwind's own `@layer theme` regardless of specificity or source order.
  *
  * The app consistently uses each neutral step for one role (950/900 = bg
- * surfaces, 800/700 = borders, 600..300 = text by prominence, 100 = primary
+ * surfaces, 800/700/600 = borders, 500..300 + `subtle` = text by prominence, 100 = primary
  * text) and every colored chip follows the same `{c}-950/60 bg,
  * {c}-300 text, {c}-700/50 border, {c}-400 dot` recipe (see lib/colors.ts).
  * A light theme just needs that whole ramp's lightness direction inverted —
@@ -21,8 +65,9 @@
   --color-neutral-900: #ffffff; /* card/panel/input surface — pops lighter than the backdrop */
   --color-neutral-800: #e7e4f3; /* borders on white surfaces */
   --color-neutral-700: #d4cfe8; /* stronger borders, dividers, hover borders */
-  --color-neutral-600: #9b95b8; /* muted icons / tertiary elements */
-  --color-neutral-500: #726c8e; /* secondary text — meta, timestamps, labels */
+  --color-neutral-600: #9b95b8; /* muted icons, hover borders (not used for text) */
+  --color-neutral-500: #68627f; /* secondary text — meta, timestamps, labels (5.2:1 on backdrop) */
+  --color-subtle: #706a8c; /* tertiary text (4.6:1 on backdrop, 5.1:1 on white) */
   --color-neutral-400: #5c5678; /* more prominent secondary text */
   --color-neutral-300: #423c5c; /* prominent secondary text, hover states */
   --color-neutral-200: #2c2745;

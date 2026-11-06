@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { addBlockedBy, removeBlockedBy, type SubIssueSummary, type ProjectDetail, type IssueRef } from "../lib/github";
 import IssuePicker from "./IssuePicker";
-import ExternalLink from "./ExternalLink";
+import { GitHubIconLink } from "./ExternalLink";
 
 interface ListProps {
   token: string;
@@ -56,9 +56,7 @@ function RelationshipList({ token, org, project, label, addLabel, items, exclude
                 </span>
               </button>
               <div className="flex shrink-0 items-center gap-2">
-                <ExternalLink href={s.url} className="text-xs text-neutral-600 hover:text-neutral-400">
-                  ↗
-                </ExternalLink>
+                <GitHubIconLink href={s.url} className="text-subtle hover:text-neutral-400" />
                 <button onClick={() => onRemove(s)} className="text-xs text-neutral-500 hover:text-neutral-200">
                   Scollega
                 </button>

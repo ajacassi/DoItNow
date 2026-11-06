@@ -181,6 +181,7 @@ export default function QueryInput({ token, value, onChange, project, className,
       e.preventDefault();
       pick(candidates[activeIndex]);
     } else if (e.key === "Escape") {
+      e.preventDefault();
       setCandidates([]);
     }
   }
@@ -199,7 +200,7 @@ export default function QueryInput({ token, value, onChange, project, className,
       />
       {candidates.length > 0 && (
         <div className="absolute z-20 mt-1 w-56 overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-xl">
-          <div className="border-b border-neutral-800 px-2 py-1 text-[10px] uppercase tracking-wide text-neutral-600">
+          <div className="border-b border-neutral-800 px-2 py-1 text-[10px] uppercase tracking-wide text-subtle">
             {mode === "field" ? "Campo" : "Valore"}
           </div>
           {candidates.map((c, i) => (

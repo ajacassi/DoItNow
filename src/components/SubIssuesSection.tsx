@@ -10,7 +10,7 @@ import {
 } from "../lib/github";
 import NewIssueModal from "./NewIssueModal";
 import IssuePicker from "./IssuePicker";
-import ExternalLink from "./ExternalLink";
+import { GitHubIconLink } from "./ExternalLink";
 
 interface Props {
   token: string;
@@ -119,9 +119,7 @@ export default function SubIssuesSection({
               </span>
             </button>
             <div className="flex shrink-0 items-center gap-2">
-              <ExternalLink href={parent.url} className="text-xs text-neutral-600 hover:text-neutral-400">
-                ↗
-              </ExternalLink>
+              <GitHubIconLink href={parent.url} className="text-subtle hover:text-neutral-400" />
               <button onClick={unlinkParent} className="text-xs text-neutral-500 hover:text-neutral-200">
                 Scollega
               </button>
@@ -184,9 +182,7 @@ export default function SubIssuesSection({
                 </span>
               </button>
               <div className="flex shrink-0 items-center gap-2">
-                <ExternalLink href={s.url} className="text-xs text-neutral-600 hover:text-neutral-400">
-                  ↗
-                </ExternalLink>
+                <GitHubIconLink href={s.url} className="text-subtle hover:text-neutral-400" />
                 <button onClick={() => unlink(s)} className="text-xs text-neutral-500 hover:text-neutral-200">
                   Scollega
                 </button>

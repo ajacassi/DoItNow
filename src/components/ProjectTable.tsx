@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Check } from "lucide-react";
 import type { Grouping, ProjectDetail, ProjectField, ProjectItem, ItemFieldValue, IssueRef, SubIssueRow, SubIssueSummary } from "../lib/github";
 import {
   groupItemsBy,
@@ -27,7 +28,7 @@ import {
 import { sortItems, type SortKey } from "../lib/sort";
 import type { ScoredItem } from "../lib/priority";
 import SubIssueProgress from "./SubIssueProgress";
-import ExternalLink from "./ExternalLink";
+import { GitHubIconLink } from "./ExternalLink";
 import LabelChip from "./LabelChip";
 
 interface Props {
@@ -167,10 +168,10 @@ function RelationLine({
               <span className="mr-1.5 tabular-nums text-neutral-500">#{b.number}</span>
               {b.title}
             </button>
-            <span className="shrink-0 text-[11px] text-neutral-600" title={`${b.repositoryOwner}/${b.repository}`}>
+            <span className="shrink-0 text-[11px] text-subtle" title={`${b.repositoryOwner}/${b.repository}`}>
               {b.repository}
             </span>
-            {b.state === "CLOSED" && <span className="shrink-0 text-[10px] text-neutral-600">chiusa</span>}
+            {b.state === "CLOSED" && <span className="shrink-0 text-[10px] text-subtle">chiusa</span>}
           </li>
         ))}
       </ul>
@@ -180,14 +181,14 @@ function RelationLine({
 
 /** Column cell: every related issue as a clickable #number — open ones coloured, closed ones struck through (they no longer block). */
 function RelationCell({ list, tone, onOpenIssue }: { list: SubIssueSummary[]; tone: string; onOpenIssue: (ref: IssueRef) => void }) {
-  if (list.length === 0) return <span className="text-neutral-700">—</span>;
+  if (list.length === 0) return <span className="text-subtle">—</span>;
   return (
     <div className="flex flex-wrap items-center gap-x-1.5 overflow-hidden" style={{ maxHeight: 36 }} title={relationTitle("", list)}>
       {list.map((b) => (
         <button
           key={b.id}
           onClick={() => onOpenIssue({ repositoryOwner: b.repositoryOwner, repository: b.repository, number: b.number })}
-          className={`text-xs tabular-nums hover:underline ${b.state === "CLOSED" ? "text-neutral-600 line-through" : tone}`}
+          className={`text-xs tabular-nums hover:underline ${b.state === "CLOSED" ? "text-subtle line-through" : tone}`}
         >
           #{b.number}
         </button>
@@ -239,16 +240,14 @@ function NameCell({
       {item.subIssuesSummary && <SubIssueProgress summary={item.subIssuesSummary} />}
       <RelationBadges item={item} open={relationsOpen} onToggle={onToggleRelations} />
       {item.url && (
-        <ExternalLink href={item.url} className="shrink-0 text-xs text-neutral-600 hover:text-neutral-400">
-          ↗
-        </ExternalLink>
+        <GitHubIconLink href={item.url} className="text-subtle hover:text-neutral-400" />
       )}
     </div>
   );
 }
 
 function AssigneeCell({ item }: { item: ProjectItem }) {
-  if (item.assignees.length === 0) return <span className="text-neutral-700">—</span>;
+  if (item.assignees.length === 0) return <span className="text-subtle">—</span>;
   return (
     <div className="flex -space-x-1.5">
       {item.assignees.map((a) => (
@@ -259,7 +258,7 @@ function AssigneeCell({ item }: { item: ProjectItem }) {
 }
 
 function AuthorCell({ item }: { item: ProjectItem }) {
-  if (!item.author) return <span className="text-neutral-700">—</span>;
+  if (!item.author) return <span className="text-subtle">—</span>;
   return (
     <div className="flex items-center gap-1.5">
       <img src={item.author.avatarUrl} alt={item.author.login} className="h-5 w-5 rounded-full border border-neutral-900" />
@@ -269,7 +268,7 @@ function AuthorCell({ item }: { item: ProjectItem }) {
 }
 
 function RepositoryCell({ item }: { item: ProjectItem }) {
-  if (!item.repository) return <span className="text-neutral-700">—</span>;
+  if (!item.repository) return <span className="text-subtle">—</span>;
   return (
     <span className="block truncate text-xs text-neutral-300" title={`${item.repositoryOwner ?? ""}/${item.repository}`}>
       {item.repository}
@@ -297,7 +296,7 @@ function scoreTooltip(s: ScoredItem): string {
 function ScoreCell({ scored }: { scored: ScoredItem | undefined }) {
   if (!scored) {
     return (
-      <span className="text-neutral-700" title="Esclusa dalla classifica di priorità (stato escluso o issue chiusa)">
+      <span className="text-subtle" title="Esclusa dalla classifica di priorità (stato escluso o issue chiusa)">
         —
       </span>
     );
@@ -369,7 +368,7 @@ function StatusCell({
                   >
                     <span className={`h-2 w-2 shrink-0 rounded-full ${st.dot}`} />
                     <span className="truncate text-neutral-200">{o.name}</span>
-                    {current && <span className="ml-auto text-neutral-500">✓</span>}
+                    {current && <Check size={13} className="ml-auto shrink-0 text-neutral-500" aria-label="stato attuale" />}
                   </button>
                 );
               })}
@@ -381,19 +380,19 @@ function StatusCell({
 }
 
 function DateCell({ iso }: { iso: string | null }) {
-  if (!iso) return <span className="text-neutral-700">—</span>;
+  if (!iso) return <span className="text-subtle">—</span>;
   return <span className="text-xs text-neutral-300">{new Date(iso).toLocaleDateString("it-IT")}</span>;
 }
 
 function FieldCell({ field, value }: { field: ProjectField; value: ItemFieldValue | undefined }) {
   if (field.dataType === "DATE") {
     const dateStr = value?.type === "date" ? value.date : null;
-    if (!dateStr) return <CalendarIcon className="h-4 w-4 text-neutral-700" />;
+    if (!dateStr) return <CalendarIcon className="h-4 w-4 text-subtle" />;
     const overdue = isOverdue(dateStr);
     return <span className={`text-xs ${overdue ? "text-red-400" : "text-neutral-300"}`}>{new Date(dateStr).toLocaleDateString("it-IT")}</span>;
   }
   if (field.dataType === "SINGLE_SELECT") {
-    if (value?.type !== "singleSelect") return <FlagIcon className="h-4 w-4 text-neutral-700" />;
+    if (value?.type !== "singleSelect") return <FlagIcon className="h-4 w-4 text-subtle" />;
     const style = colorStyle(value.color);
     return (
       <span className={`inline-flex items-center gap-1 text-xs ${style.text}`}>
@@ -403,7 +402,7 @@ function FieldCell({ field, value }: { field: ProjectField; value: ItemFieldValu
     );
   }
   if (field.dataType === "MULTI_SELECT") {
-    if (value?.type !== "multiSelect" || value.options.length === 0) return <span className="text-neutral-700">—</span>;
+    if (value?.type !== "multiSelect" || value.options.length === 0) return <span className="text-subtle">—</span>;
     return (
       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
         {value.options.map((o) => {
@@ -418,12 +417,12 @@ function FieldCell({ field, value }: { field: ProjectField; value: ItemFieldValu
     );
   }
   if (field.dataType === "NUMBER") {
-    return value?.type === "number" ? <span className="text-xs text-neutral-300">{value.number}</span> : <span className="text-neutral-700">—</span>;
+    return value?.type === "number" ? <span className="text-xs text-neutral-300">{value.number}</span> : <span className="text-subtle">—</span>;
   }
   return value?.type === "text" ? (
     <span className="truncate text-xs text-neutral-300">{value.text}</span>
   ) : (
-    <span className="text-neutral-700">—</span>
+    <span className="text-subtle">—</span>
   );
 }
 
@@ -500,7 +499,7 @@ export default function ProjectTable({
     const indent = { paddingLeft: 12 + depth * 22 };
     if (!state || state.status === "loading") {
       return (
-        <div className="border-b border-neutral-800/60 bg-neutral-900/30 py-1.5 text-xs text-neutral-600" style={indent}>
+        <div className="border-b border-neutral-800/60 bg-neutral-900/30 py-1.5 text-xs text-subtle" style={indent}>
           Carico le sub-issue…
         </div>
       );
@@ -530,7 +529,7 @@ export default function ProjectTable({
       hidden > 0 ? (
         <div
           key="__hidden"
-          className="border-b border-neutral-800/60 bg-neutral-900/30 py-1 text-[11px] italic text-neutral-600"
+          className="border-b border-neutral-800/60 bg-neutral-900/30 py-1 text-[11px] italic text-subtle"
           style={indent}
           title="Escluse dalla query o dalle label della vista, come lo sarebbero come righe a sé"
         >
@@ -584,18 +583,16 @@ export default function ProjectTable({
                 Fuori dal progetto
               </span>
             )}
-            <span className="shrink-0 truncate text-[11px] text-neutral-600" title={`${row.repositoryOwner}/${row.repository}`}>
+            <span className="shrink-0 truncate text-[11px] text-subtle" title={`${row.repositoryOwner}/${row.repository}`}>
               {row.repository}
             </span>
-            <ExternalLink href={row.url} className="shrink-0 text-xs text-neutral-600 hover:text-neutral-400">
-              ↗
-            </ExternalLink>
+            <GitHubIconLink href={row.url} className="text-subtle hover:text-neutral-400" />
           </div>
           {visibleColumns.map((key) => (
             <div key={key} className="min-w-0 px-3 py-1.5">
               {key === ASSIGNEE_COLUMN ? (
                 row.assignees.length === 0 ? (
-                  <span className="text-neutral-700">—</span>
+                  <span className="text-subtle">—</span>
                 ) : (
                   <div className="flex -space-x-1.5">
                     {row.assignees.map((a) => (
@@ -746,13 +743,13 @@ export default function ProjectTable({
                     <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
                     {name}
                   </span>
-                  <span className="text-xs text-neutral-600">{items.length}</span>
+                  <span className="text-xs text-subtle">{items.length}</span>
                 </button>
                 {newIssueOptionId && (
                   <button
                     onClick={() => onNewIssueForStatus(newIssueOptionId)}
                     title={`Nuova issue in ${name}`}
-                    className="text-neutral-600 hover:text-neutral-300"
+                    className="text-subtle hover:text-neutral-300"
                   >
                     +
                   </button>
@@ -782,13 +779,13 @@ export default function ProjectTable({
                               >
                                 {subName}
                               </span>
-                              <span className="text-xs text-neutral-600">{subItems.length}</span>
+                              <span className="text-xs text-subtle">{subItems.length}</span>
                             </button>
                             {subNewOptionId && (
                               <button
                                 onClick={() => onNewIssueForStatus(subNewOptionId)}
                                 title={`Nuova issue in ${subName}`}
-                                className="text-neutral-600 hover:text-neutral-300"
+                                className="text-subtle hover:text-neutral-300"
                               >
                                 +
                               </button>

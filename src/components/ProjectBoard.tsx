@@ -3,7 +3,7 @@ import type { Grouping, ProjectDetail, ProjectItem } from "../lib/github";
 import { groupItemsBy, groupColor, visibleGroupEntries } from "../lib/github";
 import { colorStyle } from "../lib/colors";
 import SubIssueProgress from "./SubIssueProgress";
-import ExternalLink from "./ExternalLink";
+import { GitHubIconLink } from "./ExternalLink";
 import LabelChip from "./LabelChip";
 
 interface Props {
@@ -70,9 +70,7 @@ function ItemCard({ item, onOpenItem }: { item: ProjectItem; onOpenItem: (item: 
           <span />
         )}
         {item.url && (
-          <ExternalLink href={item.url} className="text-xs text-neutral-600 hover:text-neutral-400">
-            ↗
-          </ExternalLink>
+          <GitHubIconLink href={item.url} className="text-subtle hover:text-neutral-400" />
         )}
       </div>
     </div>
@@ -124,12 +122,12 @@ export default function ProjectBoard({ project, grouping, onOpenItem, onNewIssue
                 {status}
               </span>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-neutral-600">{items.length}</span>
+                <span className="text-xs text-subtle">{items.length}</span>
                 {targetOptionId && (
                   <button
                     onClick={() => onNewIssueForStatus(targetOptionId)}
                     title={`Nuova issue in ${status}`}
-                    className="text-neutral-600 hover:text-neutral-300"
+                    className="text-subtle hover:text-neutral-300"
                   >
                     +
                   </button>
@@ -142,7 +140,7 @@ export default function ProjectBoard({ project, grouping, onOpenItem, onNewIssue
                     <div key={subName} className="space-y-2">
                       <div className="flex items-center gap-1.5 pt-1">
                         <span className="truncate text-[11px] font-medium text-neutral-500">{subName}</span>
-                        <span className="text-[11px] text-neutral-700">{subItems.length}</span>
+                        <span className="text-[11px] text-subtle">{subItems.length}</span>
                       </div>
                       {subItems.map((item) => (
                         <ItemCard key={item.id} item={item} onOpenItem={onOpenItem} />
@@ -151,7 +149,7 @@ export default function ProjectBoard({ project, grouping, onOpenItem, onNewIssue
                   ))
                 : items.map((item) => <ItemCard key={item.id} item={item} onOpenItem={onOpenItem} />)}
               {items.length === 0 && (
-                <p className="px-1 py-4 text-center text-xs text-neutral-600">Nessuna card</p>
+                <p className="px-1 py-4 text-center text-xs text-subtle">Nessuna card</p>
               )}
             </div>
           </div>
