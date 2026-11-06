@@ -59,16 +59,34 @@ function Breakdown({ s }: { s: ScoredItem }) {
         </tbody>
       </table>
       <div className="tabular-nums">
-        base <span className="text-neutral-200">{fmt(100 * s.base, 1)}</span> × stato{" "}
+        base <span className="text-neutral-200">{fmt(100 * s.base, 1)}</span>
+        {s.labelBonus !== 0 && (
+          <>
+            {" "}
+            {s.labelBonus > 0 ? "+" : "−"} label <span className="text-neutral-200">{fmt(Math.abs(s.labelBonus), 1)}</span> (
+            {s.labelBonusDetail.map((l) => `${l.name} ${l.points > 0 ? "+" : ""}${l.points}`).join(", ")})
+          </>
+        )}{" "}
+        × stato{" "}
         <span className="text-neutral-200">{fmt(s.statusMultiplier)}</span> ({s.item.status})
         {s.blockedMultiplier !== 1 && (
           <>
             {" "}
             × bloccata <span className="text-red-400">{fmt(s.blockedMultiplier)}</span>
           </>
+        )}
+        {s.effort !== null && !s.factors.some((f) => f.key === "effort") && (
+          <>
+            {" "}
+            × effort <span className="text-neutral-200">{fmt(s.effortMultiplier)}</span> ({fmt(s.effort!)}
+            {s.effortDefaulted ? ", mancante → mediana" : ""} vs mediana {fmt(s.effortMedian!)})
+          </>
         )}{" "}
         = <span className="font-semibold text-neutral-100">{fmt(s.score, 1)}</span>
       </div>
+      {s.effortMedian !== null && s.effort === null && (
+        <div className="italic text-amber-500/80">effort non impostato: ignorato per questa issue</div>
+      )}
     </div>
   );
 }
@@ -78,6 +96,7 @@ export default function ProjectPriority({ project, config, configSaved, onOpenIt
   const [openId, setOpenId] = useState<string | null>(null);
   const [showExcluded, setShowExcluded] = useState(false);
   const statusColor = useMemo(() => new Map(project.statusOptions.map((s) => [s.name, s.color])), [project.statusOptions]);
+  const showEffort = config.effort.mode !== "ignore" && !!config.effort.field;
   const parentTitle = useMemo(() => new Map(project.items.filter((i) => i.contentId).map((i) => [i.contentId!, i])), [project.items]);
 
   return (
@@ -115,6 +134,7 @@ export default function ProjectPriority({ project, config, configSaved, onOpenIt
           <col className="w-36" />
           <col className="w-32" />
           <col className="w-40" />
+          {showEffort && <col className="w-24" />}
         </colgroup>
         <thead className="sticky top-0 z-10 bg-neutral-950 text-left text-[11px] uppercase tracking-wide text-neutral-500">
           <tr>
@@ -124,6 +144,7 @@ export default function ProjectPriority({ project, config, configSaved, onOpenIt
             <th className="border-b border-neutral-800 px-2 py-2 font-medium">Stato</th>
             <th className="border-b border-neutral-800 px-2 py-2 font-medium">Criticità</th>
             <th className="border-b border-neutral-800 px-2 py-2 font-medium">Scadenza</th>
+            {showEffort && <th className="border-b border-neutral-800 px-2 py-2 font-medium">Effort</th>}
           </tr>
         </thead>
         <tbody>
@@ -199,11 +220,22 @@ export default function ProjectPriority({ project, config, configSaved, onOpenIt
                       <span className="text-neutral-700">—</span>
                     )}
                   </td>
+                  {showEffort && (
+                    <td className="border-b border-neutral-900 px-2 py-2 text-xs tabular-nums">
+                      {s.effort === null ? (
+                        <span className="text-neutral-700">—</span>
+                      ) : (
+                        <span className={s.effortDefaulted ? "italic text-neutral-600" : "text-neutral-300"} title={s.effortDefaulted ? "mancante: usata la mediana" : undefined}>
+                          {fmt(s.effort)}
+                        </span>
+                      )}
+                    </td>
+                  )}
                 </tr>
                 {open && (
                   <tr>
                     <td />
-                    <td colSpan={5} className="border-b border-neutral-900 bg-neutral-900/40 px-3 py-2">
+                    <td colSpan={showEffort ? 6 : 5} className="border-b border-neutral-900 bg-neutral-900/40 px-3 py-2">
                       <Breakdown s={s} />
                     </td>
                   </tr>

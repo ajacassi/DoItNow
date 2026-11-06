@@ -8,11 +8,16 @@ import {
   criticalityValueFor,
   dateFields,
   defaultPriorityConfig,
+  effortFields,
+  effortValueFor,
   materializeConfig,
+  normalizeConfig,
   selectFields,
   statusSettingFor,
+  type EffortMode,
   type PriorityConfig,
 } from "../lib/priority";
+import LabelChip from "./LabelChip";
 
 interface Props {
   project: ProjectDetail;
@@ -131,6 +136,18 @@ export default function PriorityConfigEditor({ project, config, onClose, onSave 
   }, [project.id]);
 
   const critField = project.fields.find((f) => f.name === draft.criticality.field);
+  const effField = project.fields.find((f) => f.name === draft.effort.field);
+  const [labelToAdd, setLabelToAdd] = useState("");
+
+  // Every label used by the project's issues, to pick the ones that get a bonus.
+  const projectLabels = (() => {
+    const map = new Map<string, string>();
+    for (const i of project.items) for (const l of i.labels) if (!map.has(l.name)) map.set(l.name, l.color);
+    return [...map.entries()].map(([name, color]) => ({ name, color })).sort((a, b) => a.name.localeCompare(b.name));
+  })();
+  const labelColor = new Map(projectLabels.map((l) => [l.name, l.color]));
+  const bonusLabels = Object.keys(draft.labelBonus).sort((a, b) => a.localeCompare(b));
+  const addableLabels = projectLabels.filter((l) => !(l.name in draft.labelBonus));
   const warnings = configWarnings(draft, project);
 
   function patch<K extends keyof PriorityConfig>(key: K, value: Partial<PriorityConfig[K]>) {
@@ -140,7 +157,7 @@ export default function PriorityConfigEditor({ project, config, onClose, onSave 
   function copy() {
     const src = others.find((o) => o.projectId === copyFrom);
     if (!src) return;
-    setDraft({ ...src.config, projectTitle: project.title });
+    setDraft({ ...normalizeConfig(src.config, project), projectTitle: project.title });
     setCopied(src.config.projectTitle);
   }
 
@@ -174,7 +191,10 @@ export default function PriorityConfigEditor({ project, config, onClose, onSave 
       <div className="min-h-0 flex-1 overflow-y-auto px-8 py-4">
         <div className="mx-auto max-w-3xl space-y-4">
           <div className="rounded-lg border border-neutral-800 bg-neutral-900/50 p-3 text-[11px] leading-relaxed text-neutral-400">
-            <span className="text-neutral-200">punteggio = 100 × media pesata dei fattori × moltiplicatore stato × moltiplicatore bloccata</span>
+            <span className="text-neutral-200">
+              punteggio = (100 × media pesata dei fattori + bonus label) × moltiplicatore stato × moltiplicatore bloccata × moltiplicatore
+              effort
+            </span>
             <br />
             Ogni fattore vale da 0 a 1. Se un'issue non ha il valore, si usa il default oppure il fattore viene ignorato (esce dalla media).
           </div>
@@ -336,6 +356,147 @@ export default function PriorityConfigEditor({ project, config, onClose, onSave 
               <NumField value={draft.blockedMultiplier} onChange={(n) => setDraft((d) => ({ ...d, blockedMultiplier: n }))} min={0} max={1} />
               <span className="text-neutral-600">0.5 = dimezza il punteggio finché c'è un blocco aperto</span>
             </Row>
+          </Section>
+
+          <Section
+            title="Effort"
+            hint="Lo sforzo stimato, confrontato con la mediana delle issue in classifica: funziona con ore, story point o taglie (S/M/L)."
+          >
+            <Row label="Modalità">
+              <select
+                value={draft.effort.mode}
+                onChange={(e) => patch("effort", { mode: e.target.value as EffortMode })}
+                className={SELECT_CLASS}
+              >
+                <option value="ignore">ignora l'effort</option>
+                <option value="divide">divide il punteggio (WSJF)</option>
+                <option value="bonus">bonus alle attività rapide</option>
+              </select>
+            </Row>
+            {draft.effort.mode !== "ignore" && (
+              <>
+                <Row label="Campo effort">
+                  <select
+                    value={draft.effort.field ?? ""}
+                    onChange={(e) => patch("effort", { field: e.target.value || null, values: {} })}
+                    className={SELECT_CLASS}
+                  >
+                    <option value="">— nessuno —</option>
+                    {draft.effort.field && !effField && <option value={draft.effort.field}>{draft.effort.field} (non trovato)</option>}
+                    {effortFields(project).map((f) => (
+                      <option key={f.id} value={f.name}>
+                        {f.name} {f.dataType === "NUMBER" ? "(numero)" : "(selezione)"}
+                      </option>
+                    ))}
+                  </select>
+                </Row>
+                {draft.effort.mode === "divide" ? (
+                  <Row label="Intensità">
+                    <NumField value={draft.effort.strength} onChange={(n) => patch("effort", { strength: n })} min={0} max={2} />
+                    <span className="text-neutral-600">× (mediana / effort) ^ intensità — 0.5 = radice, 1 = WSJF puro; limitato tra ×0.25 e ×4</span>
+                  </Row>
+                ) : (
+                  <Row label="Peso «rapidità»">
+                    <NumField value={draft.effort.weight} onChange={(n) => patch("effort", { weight: n })} step={1} min={0} />
+                    <span className="text-neutral-600">fattore = mediana / (mediana + effort): 0.5 alla mediana, verso 1 se molto piccola</span>
+                  </Row>
+                )}
+                <Row label="Senza effort">
+                  <select
+                    value={draft.effort.missing}
+                    onChange={(e) => patch("effort", { missing: e.target.value as "median" | "ignore" })}
+                    className={SELECT_CLASS}
+                  >
+                    <option value="median">usa la mediana</option>
+                    <option value="ignore">ignora l'effort per quella issue</option>
+                  </select>
+                </Row>
+                {effField?.dataType === "SINGLE_SELECT" && effField.options?.length ? (
+                  <div className="ml-44 space-y-1.5 pl-3">
+                    {effField.options.map((o) => {
+                      const { value, auto } = effortValueFor(draft, project, o.name);
+                      const st = colorStyle(o.color);
+                      return (
+                        <div key={o.id} className="flex items-center gap-2 text-xs">
+                          <span className={`w-40 truncate rounded-full border px-2 py-0.5 ${st.bg} ${st.text} ${st.border}`}>{o.name}</span>
+                          <NumField
+                            value={value}
+                            min={0}
+                            step={1}
+                            onChange={(n) => patch("effort", { values: { ...draft.effort.values, [o.name]: n } })}
+                          />
+                          <span className="text-neutral-600">unità</span>
+                          {auto && <AutoTag />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </>
+            )}
+          </Section>
+
+          <Section
+            title="Età"
+            hint="Piccola spinta che cresce con l'anzianità dell'issue, così quelle vecchie non restano ferme per sempre. Peso 0 = disattivata."
+          >
+            <Row label="Peso">
+              <NumField value={draft.age.weight} onChange={(n) => patch("age", { weight: n })} step={1} min={0} />
+            </Row>
+            <Row label="Fattore pieno a (giorni)">
+              <NumField value={draft.age.fullAtDays} onChange={(n) => patch("age", { fullAtDays: n })} step={1} min={1} />
+            </Row>
+          </Section>
+
+          <Section title="Bonus per label" hint="Punti aggiunti (o tolti, se negativi) alla base 0–100 delle issue con quella label.">
+            {bonusLabels.map((name) => (
+              <div key={name} className="flex items-center gap-3 text-xs">
+                <span className="w-44">
+                  <LabelChip name={name} color={labelColor.get(name) ?? "888888"} />
+                </span>
+                <NumField
+                  value={draft.labelBonus[name]}
+                  step={1}
+                  min={-100}
+                  max={100}
+                  onChange={(n) => setDraft((d) => ({ ...d, labelBonus: { ...d.labelBonus, [name]: n } }))}
+                />
+                <span className="text-neutral-600">punti</span>
+                <button
+                  onClick={() =>
+                    setDraft((d) => {
+                      const next = { ...d.labelBonus };
+                      delete next[name];
+                      return { ...d, labelBonus: next };
+                    })
+                  }
+                  className="text-neutral-600 hover:text-red-400"
+                >
+                  rimuovi
+                </button>
+              </div>
+            ))}
+            <div className="flex items-center gap-2 text-xs">
+              <select value={labelToAdd} onChange={(e) => setLabelToAdd(e.target.value)} className={SELECT_CLASS}>
+                <option value="">— scegli una label —</option>
+                {addableLabels.map((l) => (
+                  <option key={l.name} value={l.name}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => {
+                  if (!labelToAdd) return;
+                  setDraft((d) => ({ ...d, labelBonus: { ...d.labelBonus, [labelToAdd]: 10 } }));
+                  setLabelToAdd("");
+                }}
+                disabled={!labelToAdd}
+                className="rounded-md border border-neutral-700 px-2 py-1 text-neutral-300 hover:border-neutral-500 disabled:opacity-40"
+              >
+                + Aggiungi
+              </button>
+            </div>
           </Section>
         </div>
       </div>

@@ -20,7 +20,7 @@ import {
   type SavedView,
   type ViewMode,
 } from "../lib/store";
-import { defaultPriorityConfig, type PriorityConfig } from "../lib/priority";
+import { defaultPriorityConfig, normalizeConfig, type PriorityConfig } from "../lib/priority";
 import { defaultColumns, orderColumns } from "../lib/columns";
 import type { SortKey } from "../lib/sort";
 import ProjectTable from "./ProjectTable";
@@ -188,7 +188,7 @@ export default function ProjectView({
   }, [project.id]);
 
   const priorityConfig = useMemo(
-    () => savedPriorityConfig ?? defaultPriorityConfig(project),
+    () => (savedPriorityConfig ? normalizeConfig(savedPriorityConfig, project) : defaultPriorityConfig(project)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [savedPriorityConfig, project.id, project.fields],
   );
