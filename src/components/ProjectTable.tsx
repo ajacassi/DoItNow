@@ -40,6 +40,8 @@ interface Props {
   sortKeys: SortKey[];
   /** Priority score per project item id; items excluded from the ranking are absent. */
   priorityScores: Map<string, ScoredItem>;
+  /** The view's filters (label chips + query) applied to sub-issues too — null when none is set. */
+  subIssueFilter: ((row: SubIssueRow) => boolean) | null;
   onOpenItem: (item: ProjectItem) => void;
   /** Open an issue that isn't necessarily a row of this project (e.g. a sub-issue from another repo). */
   onOpenIssue: (ref: IssueRef) => void;
@@ -433,6 +435,7 @@ export default function ProjectTable({
   reversed,
   sortKeys,
   priorityScores,
+  subIssueFilter,
   onOpenItem,
   onOpenIssue,
   onNewIssueForStatus,
@@ -519,8 +522,22 @@ export default function ProjectTable({
       if (i === undefined) return statusCount;
       return reversed ? statusCount - 1 - i : i;
     };
-    const rows = [...state.rows].sort((a, b) => rank(a) - rank(b));
-    return rows.map((row) => (
+    // Same filters as the top-level rows, so every level shows the same set of issues.
+    const shown = subIssueFilter ? state.rows.filter(subIssueFilter) : state.rows;
+    const hidden = state.rows.length - shown.length;
+    const rows = [...shown].sort((a, b) => rank(a) - rank(b));
+    const hiddenNote =
+      hidden > 0 ? (
+        <div
+          key="__hidden"
+          className="border-b border-neutral-800/60 bg-neutral-900/30 py-1 text-[11px] italic text-neutral-600"
+          style={indent}
+          title="Escluse dalla query o dalle label della vista, come lo sarebbero come righe a sé"
+        >
+          {hidden === 1 ? "1 sub-issue nascosta dal filtro" : `${hidden} sub-issue nascoste dal filtro`}
+        </div>
+      ) : null;
+    return [...rows.map((row) => (
       <div key={row.id}>
         <div
           className="grid items-center border-b border-neutral-800/60 bg-neutral-900/30 hover:bg-neutral-900/60"
@@ -596,7 +613,7 @@ export default function ProjectTable({
         </div>
         {renderSubIssues(row.id, depth + 1)}
       </div>
-    ));
+    )), hiddenNote];
   }
 
   const fieldByName = new Map(project.fields.map((f) => [f.name, f]));

@@ -943,12 +943,45 @@ export interface SubIssueSummary {
 /** One sub-issue as listed under its parent in the table — any repo, project member or not. */
 export interface SubIssueRow extends SubIssueSummary {
   assignees: ProjectItemUser[];
+  labels: ProjectItemLabel[];
+  author: ProjectItemUser | null;
   /** How many sub-issues this one has itself (sub-issues nest). */
   subIssuesTotal: number;
   /** Whether this sub-issue is an item of the project being viewed. */
   inProject: boolean;
   /** Its Status in that project — null if it has none, or isn't in the project at all. */
   status: string | null;
+}
+
+/**
+ * A sub-issue seen as a project item, so the view's query can judge it like
+ * any row. Only for sub-issues outside the project: those inside it have a
+ * real item, with its custom fields — use that instead.
+ */
+export function subIssueAsItem(row: SubIssueRow): ProjectItem {
+  return {
+    id: row.id,
+    contentId: row.id,
+    parentId: null,
+    subIssuesSummary: null,
+    blockedBy: [],
+    blocking: [],
+    status: row.status ?? NO_STATUS,
+    contentType: "Issue",
+    number: row.number,
+    title: row.title,
+    url: row.url,
+    state: row.state,
+    repository: row.repository,
+    repositoryOwner: row.repositoryOwner,
+    createdAt: null,
+    updatedAt: null,
+    closedAt: null,
+    author: row.author,
+    assignees: row.assignees,
+    labels: row.labels,
+    fields: {},
+  };
 }
 
 const SUB_ISSUE_ROWS_QUERY = `
@@ -964,6 +997,8 @@ const SUB_ISSUE_ROWS_QUERY = `
             url
             repository { name owner { login } }
             assignees(first: 5) { nodes { login avatarUrl } }
+            labels(first: 20) { nodes { name color } }
+            author { login avatarUrl }
             subIssuesSummary { total }
             projectItems(first: 10, includeArchived: false) {
               nodes {
@@ -992,6 +1027,8 @@ export async function fetchSubIssueRows(token: string, issueId: string, projectI
         nodes: Array<
           RawSubIssue & {
             assignees: { nodes: ProjectItemUser[] };
+            labels: { nodes: ProjectItemLabel[] };
+            author: ProjectItemUser | null;
             subIssuesSummary: { total: number } | null;
             projectItems: { nodes: Array<{ project: { id: string }; fieldValueByName: { name?: string } | null }> };
           }
@@ -1012,6 +1049,8 @@ export async function fetchSubIssueRows(token: string, issueId: string, projectI
       repository: s.repository.name,
       repositoryOwner: s.repository.owner.login,
       assignees: s.assignees.nodes,
+      labels: s.labels.nodes,
+      author: s.author,
       subIssuesTotal: s.subIssuesSummary?.total ?? 0,
     };
   });

@@ -251,6 +251,27 @@ function evaluateNode(node: QueryNode, item: ProjectItem, project: ProjectDetail
   }
 }
 
+/** Field names every item has, whatever the project's custom fields are. */
+const BUILT_IN_FIELDS = new Set(["label", "assignee", "author", "status", "state", "is", "repo", "repository", "title", "number"]);
+
+/**
+ * Field names used in the query that are neither built in nor a field of the
+ * project. Such a term never matches (and, negated, always does), so the query
+ * silently filters nothing — worth a warning (usually a typo).
+ */
+export function unknownQueryFields(node: QueryNode | null, project: ProjectDetail): string[] {
+  const known = new Set(project.fields.map((f) => f.name.toLowerCase()));
+  const unknown = new Set<string>();
+  const walk = (n: QueryNode) => {
+    if (n.type === "term") {
+      if (n.field && !BUILT_IN_FIELDS.has(n.field) && !known.has(n.field)) unknown.add(n.field);
+    } else if (n.type === "not") walk(n.child);
+    else n.children.forEach(walk);
+  };
+  if (node) walk(node);
+  return [...unknown];
+}
+
 export function matchesIssueQuery(node: QueryNode | null, item: ProjectItem, project: ProjectDetail): boolean {
   if (!node) return true;
   return evaluateNode(node, item, project);

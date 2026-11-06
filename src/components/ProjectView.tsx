@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ProjectDetail, ProjectItem, IssueRef, StatusOption } from "../lib/github";
-import { setProjectFieldSingleSelect, fetchRepoIssueCount, mostCommonRepo, DEFAULT_GROUPING, groupingHasStatus, type Grouping } from "../lib/github";
-import { parseIssueQuery, matchesIssueQuery } from "../lib/query";
+import type { ProjectDetail, ProjectItem, IssueRef, StatusOption, SubIssueRow } from "../lib/github";
+import { setProjectFieldSingleSelect, fetchRepoIssueCount, mostCommonRepo, subIssueAsItem, DEFAULT_GROUPING, groupingHasStatus, type Grouping } from "../lib/github";
+import { parseIssueQuery, matchesIssueQuery, unknownQueryFields } from "../lib/query";
+import QueryWarning from "./QueryWarning";
 import {
   getProjectViewState,
   setProjectViewState,
@@ -368,19 +369,36 @@ export default function ProjectView({
     }
   }, [queryText]);
 
+  const unknownFields = useMemo(() => (queryText.trim() ? unknownQueryFields(parsedQuery, project) : []), [queryText, parsedQuery, project]);
+
+  // The label chips and the query, as one predicate — null when neither is set.
+  // Applied to the project's items AND to the sub-issues listed under them, so
+  // the view shows the same set of issues at every level.
+  const itemFilter = useMemo(() => {
+    const byLabel = selectedLabels.size > 0;
+    const byQuery = !!queryText.trim();
+    if (!byLabel && !byQuery) return null;
+    return (item: ProjectItem) =>
+      (!byLabel ||
+        item.labels.some((l) => selectedLabels.has(l.name)) ||
+        (selectedLabels.has(NO_LABEL_KEY) && item.labels.length === 0)) &&
+      (!byQuery || matchesIssueQuery(parsedQuery, item, project));
+  }, [project, selectedLabels, queryText, parsedQuery]);
+
   const visibleProject: ProjectDetail = useMemo(() => {
     const base: ProjectDetail = includeAllRepos ? { ...project, includeAllRepos: true } : project;
-    let items = project.items;
-    if (selectedLabels.size > 0) {
-      items = items.filter(
-        (item) => item.labels.some((l) => selectedLabels.has(l.name)) || (selectedLabels.has(NO_LABEL_KEY) && item.labels.length === 0),
-      );
-    }
-    if (queryText.trim()) {
-      items = items.filter((item) => matchesIssueQuery(parsedQuery, item, project));
-    }
-    return items === project.items ? base : { ...base, items };
-  }, [project, includeAllRepos, selectedLabels, queryText, parsedQuery]);
+    if (!itemFilter) return base;
+    return { ...base, items: project.items.filter(itemFilter) };
+  }, [project, includeAllRepos, itemFilter]);
+
+  // Sub-issues in the project are judged on their full project item (custom
+  // fields included); those outside it on what the sub-issue itself carries —
+  // a field they don't have counts as empty, like for any item.
+  const subIssueFilter = useMemo(() => {
+    if (!itemFilter) return null;
+    const byContentId = new Map(project.items.filter((i) => i.contentId).map((i) => [i.contentId!, i]));
+    return (row: SubIssueRow) => itemFilter(byContentId.get(row.id) ?? subIssueAsItem(row));
+  }, [project, itemFilter]);
 
   // Priority scores for the Table's "Punteggio" column — computed on the
   // current view, exactly like the Priority view, so the numbers match.
@@ -562,6 +580,7 @@ export default function ProjectView({
             Cancella
           </button>
         )}
+        <QueryWarning fields={unknownFields} />
         <div className="rounded-lg border border-neutral-800 bg-neutral-900/50 px-3 py-1.5 text-[11px] leading-relaxed text-neutral-500">
           <span className="text-neutral-300">chiave:valore</span> · spazio = and · <span className="text-neutral-300">or</span> = oppure ·{" "}
           <span className="text-neutral-300">-</span>nega · (raggruppa) · "virgolette" per spazi (anche nel nome campo, es.{" "}
@@ -592,6 +611,7 @@ export default function ProjectView({
               reversed={statusOrderReversed}
               sortKeys={sortKeys}
               priorityScores={priorityScores}
+              subIssueFilter={subIssueFilter}
               onOpenItem={openItemDetail}
               onOpenIssue={setOpenIssueRef}
               onNewIssueForStatus={openNewIssue}

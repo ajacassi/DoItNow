@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ProjectDetail, ProjectItem } from "../lib/github";
 import { removeItemFromProject, deleteIssue, GithubApiError } from "../lib/github";
-import { parseIssueQuery, matchesIssueQuery } from "../lib/query";
+import { parseIssueQuery, matchesIssueQuery, unknownQueryFields } from "../lib/query";
+import QueryWarning from "./QueryWarning";
 import QueryInput from "./QueryInput";
 import LabelChip from "./LabelChip";
 import ExternalLink from "./ExternalLink";
@@ -138,6 +139,7 @@ export default function ProjectCleanup({ token, project, onClose, onItemRemoved 
             Cancella
           </button>
         )}
+        <QueryWarning fields={queryText.trim() ? unknownQueryFields(parsedQuery, project) : []} />
         <div className="rounded-lg border border-neutral-800 bg-neutral-900/50 px-3 py-1.5 text-[11px] leading-relaxed text-neutral-500">
           <span className="text-neutral-300">chiave:valore</span> · spazio = and · <span className="text-neutral-300">or</span> = oppure ·{" "}
           <span className="text-neutral-300">-</span>nega · (raggruppa) · "virgolette" per spazi (anche nel nome campo, es.{" "}
