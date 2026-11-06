@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { save, open } from "@tauri-apps/plugin-dialog";
+import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
 import type { ProjectDetail } from "../lib/github";
 import { listPriorityConfigs } from "../lib/store";
 import { colorStyle } from "../lib/colors";
@@ -17,14 +19,27 @@ import {
   type EffortMode,
   type PriorityConfig,
 } from "../lib/priority";
+import {
+  buildSharedPriority,
+  parseSharedPriority,
+  suggestedFileName,
+  PRIORITY_FILE_FILTERS,
+  type SharedView,
+} from "../lib/priorityShare";
 import LabelChip from "./LabelChip";
 
 interface Props {
   project: ProjectDetail;
   config: PriorityConfig;
+  /** The view currently on screen (active saved view, or the unsaved filters), offered as an optional part of the export. */
+  currentView: SharedView | null;
   onClose: () => void;
   onSave: (config: PriorityConfig) => void;
+  /** Creates a saved view from an imported file; returns the name it got (made unique if needed). */
+  onCreateView: (view: SharedView) => string;
 }
+
+const MODE_LABEL: Record<string, string> = { table: "Tabella", board: "Board", gantt: "Gantt", priority: "Priorità" };
 
 /** Number input that keeps the raw text while typing ("0.", "") and commits a valid number on blur/Enter. */
 function NumField({
@@ -125,11 +140,14 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 const SELECT_CLASS =
   "rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1 text-xs outline-none focus:border-indigo-500";
 
-export default function PriorityConfigEditor({ project, config, onClose, onSave }: Props) {
+export default function PriorityConfigEditor({ project, config, currentView, onClose, onSave, onCreateView }: Props) {
   const [draft, setDraft] = useState<PriorityConfig>(config);
   const [others, setOthers] = useState<{ projectId: string; config: PriorityConfig }[]>([]);
   const [copyFrom, setCopyFrom] = useState("");
-  const [copied, setCopied] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null);
+  const [includeView, setIncludeView] = useState(!!currentView);
+  // A view that came with an imported file, waiting for "Crea vista" (or already created: then its final name).
+  const [importedView, setImportedView] = useState<{ view: SharedView; createdAs: string | null } | null>(null);
 
   useEffect(() => {
     listPriorityConfigs().then((all) => setOthers(all.filter((c) => c.projectId !== project.id)));
@@ -158,7 +176,36 @@ export default function PriorityConfigEditor({ project, config, onClose, onSave 
     const src = others.find((o) => o.projectId === copyFrom);
     if (!src) return;
     setDraft({ ...normalizeConfig(src.config, project), projectTitle: project.title });
-    setCopied(src.config.projectTitle);
+    setNotice({ text: `Copiata da "${src.config.projectTitle}" — controlla e salva.`, error: false });
+  }
+
+  async function exportToFile() {
+    try {
+      const target = await save({ defaultPath: suggestedFileName(project.title), filters: PRIORITY_FILE_FILTERS });
+      if (!target) return;
+      // What's on screen (even if not saved yet), with auto-guessed values written out explicitly.
+      const file = buildSharedPriority(materializeConfig(draft, project), project.title, includeView ? currentView : null);
+      await writeTextFile(target, JSON.stringify(file, null, 2));
+      setNotice({ text: `Configurazione esportata${file.view ? ` con la vista "${file.view.name}"` : ""}.`, error: false });
+    } catch (e) {
+      setNotice({ text: e instanceof Error ? e.message : "Esportazione non riuscita.", error: true });
+    }
+  }
+
+  async function importFromFile() {
+    try {
+      const picked = await open({ multiple: false, filters: PRIORITY_FILE_FILTERS });
+      if (!picked || Array.isArray(picked)) return;
+      const file = parseSharedPriority(await readTextFile(picked));
+      setDraft({ ...normalizeConfig(file.priorityConfig, project), projectTitle: project.title });
+      setImportedView(file.view ? { view: file.view, createdAs: null } : null);
+      setNotice({
+        text: `Importata${file.sourceProject ? ` da "${file.sourceProject}"` : ""} — controlla e salva.`,
+        error: false,
+      });
+    } catch (e) {
+      setNotice({ text: e instanceof Error ? e.message : "Importazione non riuscita.", error: true });
+    }
   }
 
   return (
@@ -199,8 +246,33 @@ export default function PriorityConfigEditor({ project, config, onClose, onSave 
             Ogni fattore vale da 0 a 1. Se un'issue non ha il valore, si usa il default oppure il fattore viene ignorato (esce dalla media).
           </div>
 
+          <section className="space-y-2 rounded-lg border border-neutral-800 p-4 text-xs">
+            <h2 className="text-sm font-semibold">Condividi</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={exportToFile}
+                title="Salva in un file la configurazione mostrata qui (anche se non ancora salvata)"
+                className="rounded-md border border-neutral-700 px-2 py-1 text-neutral-300 hover:border-neutral-500"
+              >
+                ⤓ Esporta su file
+              </button>
+              {currentView && (
+                <label className="flex items-center gap-1.5 text-neutral-400" title={currentView.queryText || "nessuna query"}>
+                  <input type="checkbox" checked={includeView} onChange={(e) => setIncludeView(e.target.checked)} />
+                  includi la vista "{currentView.name}"
+                  {currentView.queryText && <code className="max-w-56 truncate text-neutral-500">{currentView.queryText}</code>}
+                </label>
+              )}
+              <button
+                onClick={importFromFile}
+                title="Carica qui una configurazione esportata da DoItNow: diventa effettiva solo quando salvi"
+                className="ml-auto rounded-md border border-neutral-700 px-2 py-1 text-neutral-300 hover:border-neutral-500"
+              >
+                ⤒ Importa da file
+              </button>
+            </div>
           {others.length > 0 && (
-            <div className="flex items-center gap-2 text-xs">
+            <div className="flex items-center gap-2">
               <span className="text-neutral-400">Copia da un altro progetto:</span>
               <select value={copyFrom} onChange={(e) => setCopyFrom(e.target.value)} className={SELECT_CLASS}>
                 <option value="">— scegli —</option>
@@ -217,9 +289,34 @@ export default function PriorityConfigEditor({ project, config, onClose, onSave 
               >
                 Copia
               </button>
-              {copied && <span className="text-emerald-400">Copiata da "{copied}" — controlla e salva.</span>}
             </div>
           )}
+            {notice && <div className={notice.error ? "text-red-400" : "text-emerald-400"}>{notice.text}</div>}
+            {importedView && (
+              <div className="flex items-center gap-3 rounded-md border border-neutral-800 bg-neutral-900/50 p-2">
+                <div className="min-w-0 flex-1 text-neutral-400">
+                  Il file contiene anche la vista <span className="text-neutral-200">"{importedView.view.name}"</span> (
+                  {MODE_LABEL[importedView.view.viewMode]}
+                  {importedView.view.queryText && (
+                    <>
+                      , query <code className="text-neutral-300">{importedView.view.queryText}</code>
+                    </>
+                  )}
+                  {importedView.view.labels.length > 0 && <>, label {importedView.view.labels.join(", ")}</>})
+                </div>
+                {importedView.createdAs ? (
+                  <span className="shrink-0 text-emerald-400">Creata come "{importedView.createdAs}"</span>
+                ) : (
+                  <button
+                    onClick={() => setImportedView({ ...importedView, createdAs: onCreateView(importedView.view) })}
+                    className="shrink-0 rounded-md bg-indigo-600 px-2 py-1 font-medium text-white hover:bg-indigo-500"
+                  >
+                    Crea vista
+                  </button>
+                )}
+              </div>
+            )}
+          </section>
 
           {warnings.length > 0 && (
             <div className="rounded-lg border border-amber-700/50 bg-amber-950/30 p-3 text-xs text-amber-300">

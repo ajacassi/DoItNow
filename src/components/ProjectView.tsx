@@ -21,6 +21,7 @@ import {
   type ViewMode,
 } from "../lib/store";
 import { defaultPriorityConfig, normalizeConfig, scoreItems, type PriorityConfig, type ScoredItem } from "../lib/priority";
+import { uniqueViewName, type SharedView } from "../lib/priorityShare";
 import { defaultColumns, orderColumns } from "../lib/columns";
 import type { SortKey } from "../lib/sort";
 import ProjectTable from "./ProjectTable";
@@ -298,6 +299,21 @@ export default function ProjectView({
     const newView: SavedView = { id: crypto.randomUUID(), name, queryText, labels: Array.from(selectedLabels), viewMode: view };
     setViews((vs) => [...vs, newView]);
     setActiveViewId(newView.id);
+  }
+
+  // For the priority config export/import: the view on screen (offered as an
+  // optional part of the file), and creating a saved view from an imported one.
+  const activeSavedView = views.find((v) => v.id === activeViewId);
+  const currentViewForShare: SharedView | null =
+    activeSavedView || queryText.trim() || selectedLabels.size > 0
+      ? { name: activeSavedView?.name ?? "Vista", queryText, labels: Array.from(selectedLabels), viewMode: view }
+      : null;
+
+  function createViewFromShare(data: SharedView): string {
+    const newView: SavedView = { id: crypto.randomUUID(), ...data, name: uniqueViewName(data.name, views) };
+    setViews((vs) => [...vs, newView]);
+    applyView(newView);
+    return newView.name;
   }
 
   function deleteView(id: string) {
@@ -605,6 +621,8 @@ export default function ProjectView({
         <PriorityConfigEditor
           project={project}
           config={priorityConfig}
+          currentView={currentViewForShare}
+          onCreateView={createViewFromShare}
           onClose={() => setShowPriorityConfig(false)}
           onSave={savePriorityConfig}
         />
