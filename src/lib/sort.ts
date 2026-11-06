@@ -9,6 +9,7 @@ import {
   BLOCKED_BY_COLUMN,
   BLOCKING_COLUMN,
   PRIORITY_SCORE_COLUMN,
+  STATUS_COLUMN,
 } from "./columns";
 
 export const TITLE_COLUMN = "title";
@@ -44,6 +45,11 @@ function fieldSortValue(project: ProjectDetail, fieldName: string, value: ItemFi
 
 function sortValueFor(item: ProjectItem, project: ProjectDetail, key: string, scores?: Map<string, number>): SortValue {
   switch (key) {
+    case STATUS_COLUMN: {
+      // In the project's own status order, like the status groups.
+      const idx = project.statusOptions.findIndex((o) => o.name === item.status);
+      return idx >= 0 ? idx : project.statusOptions.length;
+    }
     case PRIORITY_SCORE_COLUMN:
       return scores?.get(item.id) ?? null;
     case TITLE_COLUMN:

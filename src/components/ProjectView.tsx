@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectDetail, ProjectItem, IssueRef, StatusOption } from "../lib/github";
-import { setProjectFieldSingleSelect, fetchRepoIssueCount, mostCommonRepo } from "../lib/github";
+import { setProjectFieldSingleSelect, fetchRepoIssueCount, mostCommonRepo, DEFAULT_GROUPING, groupingHasStatus, type Grouping } from "../lib/github";
 import { parseIssueQuery, matchesIssueQuery } from "../lib/query";
 import {
   getProjectViewState,
@@ -11,8 +11,8 @@ import {
   setStatusOrderReversed,
   getSortKeys,
   setSortKeys,
-  getSubGroupBy,
-  setSubGroupBy,
+  getGrouping,
+  setGrouping,
   getIncludeAllRepos,
   setIncludeAllRepos,
   getPriorityConfig,
@@ -24,7 +24,7 @@ import {
 } from "../lib/store";
 import { defaultPriorityConfig, normalizeConfig, scoreItems, type PriorityConfig, type ScoredItem } from "../lib/priority";
 import { uniqueViewName, type SharedView } from "../lib/priorityShare";
-import { defaultColumns, orderColumns } from "../lib/columns";
+import { defaultColumns, orderColumns, STATUS_COLUMN } from "../lib/columns";
 import type { SortKey } from "../lib/sort";
 import ProjectTable from "./ProjectTable";
 import ProjectBoard from "./ProjectBoard";
@@ -149,20 +149,25 @@ export default function ProjectView({
     setSortKeys(project.id, next);
   }
 
-  // Optional secondary subdivision within each status group, for Table/Board/
-  // Gantt — status itself is always the outer grouping. One setting shared by
-  // every view of this project, like columns/status order/sort. Multi-valued
-  // fields (assignees, labels, multi-select) put an item in every matching
-  // subgroup, by design.
-  const [subGroupBy, setSubGroupByState] = useState("none");
+  // Two free grouping levels for Table/Gantt (Board: columns + split). One
+  // setting shared by every view of this project, like columns/status
+  // order/sort. Multi-valued fields (assignees, labels, multi-select) put an
+  // item in every matching group, by design.
+  const [grouping, setGroupingState] = useState<Grouping>(DEFAULT_GROUPING);
 
   useEffect(() => {
-    getSubGroupBy(project.id).then(setSubGroupByState);
+    setGroupingState(DEFAULT_GROUPING);
+    getGrouping(project.id).then(setGroupingState);
   }, [project.id]);
 
-  function changeSubGroupBy(next: string) {
-    setSubGroupByState(next);
-    setSubGroupBy(project.id, next);
+  function changeGrouping(next: Grouping) {
+    setGroupingState(next);
+    setGrouping(project.id, next);
+    // Status no longer shown as a group: bring in the Stato column, so it stays
+    // visible (and changeable) on every row. It can be turned off again.
+    if (!groupingHasStatus(next) && groupingHasStatus(grouping) && !visibleColumns.has(STATUS_COLUMN)) {
+      toggleColumn(STATUS_COLUMN);
+    }
   }
 
   // Whether to also show issues from repos not linked to the project (off by
@@ -455,8 +460,8 @@ export default function ProjectView({
           </button>
           {view === "table" && <ColumnPicker project={project} selected={visibleColumns} onToggle={toggleColumn} />}
           {view === "table" && <SortPicker project={project} sortKeys={sortKeys} onChange={changeSortKeys} />}
-          {view !== "priority" && view !== "analytics" && <GroupByPicker project={project} value={subGroupBy} onChange={changeSubGroupBy} />}
-          {(view === "table" || view === "gantt") && (
+          {view !== "priority" && view !== "analytics" && <GroupByPicker project={project} value={grouping} onChange={changeGrouping} />}
+          {(view === "table" || view === "gantt") && groupingHasStatus(grouping) && (
             <button
               onClick={toggleStatusOrder}
               title="Inverte l'ordine degli stati in Tabella e Gantt (gli stati senza issue non vengono mostrati)"
@@ -583,7 +588,7 @@ export default function ProjectView({
               token={token}
               project={visibleProject}
               columns={orderColumns(project, visibleColumns)}
-              subGroupBy={subGroupBy}
+              grouping={grouping}
               reversed={statusOrderReversed}
               sortKeys={sortKeys}
               priorityScores={priorityScores}
@@ -595,7 +600,7 @@ export default function ProjectView({
           ) : view === "board" ? (
             <ProjectBoard
               project={visibleProject}
-              subGroupBy={subGroupBy}
+              grouping={grouping}
               onOpenItem={openItemDetail}
               onNewIssueForStatus={openNewIssue}
               onMoveItem={moveItemToStatus}
@@ -617,7 +622,7 @@ export default function ProjectView({
               onEditConfig={() => setShowPriorityConfig(true)}
             />
           ) : (
-            <ProjectGantt project={visibleProject} subGroupBy={subGroupBy} reversed={statusOrderReversed} onOpenItem={openItemDetail} />
+            <ProjectGantt project={visibleProject} grouping={grouping} reversed={statusOrderReversed} onOpenItem={openItemDetail} />
           )}
         </main>
       </div>

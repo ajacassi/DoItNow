@@ -1,12 +1,12 @@
 import { useState } from "react";
 import type { ProjectDetail, ProjectField, ProjectItem } from "../lib/github";
-import { groupItemsBy, visibleGroupEntries, groupColor } from "../lib/github";
+import { groupItemsBy, visibleGroupEntries, groupColor, ALL_GROUP, type Grouping } from "../lib/github";
 import { colorStyle } from "../lib/colors";
 
 interface Props {
   project: ProjectDetail;
   /** Optional secondary subdivision within each status group ("none", "assignee", "label", or `field:<name>`). */
-  subGroupBy: string;
+  grouping: Grouping;
   reversed: boolean;
   onOpenItem: (item: ProjectItem) => void;
 }
@@ -49,15 +49,15 @@ function daysBetween(a: Date, b: Date): number {
   return Math.round((b.getTime() - a.getTime()) / DAY_MS);
 }
 
-export default function ProjectGantt({ project, subGroupBy, reversed, onOpenItem }: Props) {
+export default function ProjectGantt({ project, grouping, reversed, onOpenItem }: Props) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [pxPerDay, setPxPerDay] = useState(24);
   const [showDeps, setShowDeps] = useState(true);
 
-  // The chosen subdivision (if any) becomes the outer grouping, with status
-  // always nested inside it — "Nessuno" means status stays the sole, outer
-  // grouping, exactly like before this feature existed.
-  const outerKey = subGroupBy === "none" ? "status" : subGroupBy;
+  // Two free grouping levels; "none" first = one single group of every item.
+  // Bars are always colored by status, so status stays visible either way.
+  const outerKey = grouping.first;
+  const innerKey = grouping.first === "none" ? "none" : grouping.second;
 
   // "Inverti" always reverses the STATUS order, wherever status ends up —
   // outer (no subdivision) or nested inside each subgroup — never the
@@ -96,9 +96,9 @@ export default function ProjectGantt({ project, subGroupBy, reversed, onOpenItem
   // collapsed subheader hides its item rows here, so cursorY/layout below
   // never has to special-case it separately.
   function rowsForStatus(status: string, rows: GanttRange[]): GanttRow[] {
-    if (outerKey === "status") return rows.map((r) => ({ kind: "item", ...r }));
+    if (innerKey === "none") return rows.map((r) => ({ kind: "item", ...r }));
     const byId = new Map(rows.map((r) => [r.item.id, r]));
-    const subgroups = visibleGroupEntries(groupItemsBy(rows.map((r) => r.item), project, "status"), reversed);
+    const subgroups = visibleGroupEntries(groupItemsBy(rows.map((r) => r.item), project, innerKey), innerKey === "status" && reversed);
     const out: GanttRow[] = [];
     for (const [subName, subItems] of subgroups) {
       const subKey = `${status}::${subName}`;
@@ -226,7 +226,7 @@ export default function ProjectGantt({ project, subGroupBy, reversed, onOpenItem
               // faint, alternating background, not a loud border (a border
               // would add height here and desync the bars in the timeline,
               // whose Y positions are computed from ROW_H arithmetic, not layout).
-              const bandBg = outerKey === "status" ? "" : "bg-neutral-800/50";
+              const bandBg = innerKey === "none" ? "" : "bg-neutral-800/50";
               return (
                 <div key={status}>
                   <button
@@ -237,7 +237,7 @@ export default function ProjectGantt({ project, subGroupBy, reversed, onOpenItem
                     <ChevronIcon open={!isCollapsed} />
                     <span className={`inline-flex items-center gap-1.5 truncate rounded-full border px-2 py-0.5 text-[11px] font-semibold ${style.bg} ${style.text} ${style.border}`}>
                       <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`} />
-                      {status}
+                      {status === ALL_GROUP ? "Tutte le issue" : status}
                     </span>
                     <span className="shrink-0 text-[11px] text-neutral-600" title="con date impostate / totale">
                       {withDates}/{rows.length}
@@ -263,7 +263,7 @@ export default function ProjectGantt({ project, subGroupBy, reversed, onOpenItem
                           style={{ height: ROW_H }}
                           title={`${row.item.number != null ? `#${row.item.number} ` : ""}${row.item.title}${row.start ? "" : " — nessuna data impostata"}`}
                           className={`flex w-full items-center truncate border-b border-neutral-800/40 px-2 text-left text-xs hover:text-neutral-100 hover:underline ${
-                            outerKey === "status" ? "pl-7" : "pl-9"
+                            innerKey === "none" ? "pl-7" : "pl-9"
                           } ${row.start ? "text-neutral-300" : "text-neutral-600"} ${bandBg}`}
                         >
                           {row.item.number != null && <span className="mr-1.5 shrink-0 text-neutral-500">#{row.item.number}</span>}
@@ -291,7 +291,7 @@ export default function ProjectGantt({ project, subGroupBy, reversed, onOpenItem
 
             {rangesByStatus.map(([status]) => {
               const isCollapsed = collapsed[status];
-              const bandBg = outerKey === "status" ? "" : "bg-neutral-800/50";
+              const bandBg = innerKey === "none" ? "" : "bg-neutral-800/50";
               return (
                 <div key={status}>
                   <div style={{ height: ROW_H }} className={`border-b border-neutral-800/60 ${bandBg}`} />

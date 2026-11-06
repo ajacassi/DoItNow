@@ -746,12 +746,29 @@ const NO_ASSIGNEE = "Non assegnato";
 const NO_AUTHOR = "Autore sconosciuto";
 const NO_LABEL = "Senza label";
 const NO_FIELD_VALUE = "Senza valore";
+/** The single bucket `groupItemsBy(..., "none")` puts every item in (rendered without a group header). */
+export const ALL_GROUP = "__all__";
 
-/**
- * Every dimension Table/Board/Gantt can additionally subdivide by, for the
- * "Sottodividi per" picker — status itself isn't listed here since it's
- * always the outer grouping; "none" (the default) means just status.
- */
+/** A grouping level: "none" | "status" | "assignee" | "author" | "label" | `field:<name>`. */
+export interface Grouping {
+  first: string;
+  /** Only meaningful when `first` isn't "none"; never equal to `first`. */
+  second: string;
+}
+
+export const DEFAULT_GROUPING: Grouping = { first: "status", second: "none" };
+
+/** Every dimension Table/Gantt can group by, at either level (status included, "none" first). */
+export function groupingOptions(project: ProjectDetail): GroupByOption[] {
+  const [none, ...rest] = subGroupByOptions(project);
+  return [none, { key: "status", label: "Stato" }, ...rest];
+}
+
+export function groupingHasStatus(g: Grouping): boolean {
+  return g.first === "status" || (g.first !== "none" && g.second === "status");
+}
+
+/** Every non-status dimension items can be grouped by ("none" first); see groupingOptions for the full list. */
 export function subGroupByOptions(project: ProjectDetail): GroupByOption[] {
   const options: GroupByOption[] = [
     { key: "none", label: "Nessuno" },
@@ -824,7 +841,9 @@ export function groupItemsBy(items: ProjectItem[], project: ProjectDetail, group
     // Issues pulled in from a repo not actually linked to the project (e.g.
     // via "relates to") aren't shown as their own row either.
     if (!isInLinkedRepo(item, project)) continue;
-    if (groupBy === "status") {
+    if (groupBy === "none") {
+      add(ALL_GROUP, item);
+    } else if (groupBy === "status") {
       add(item.status, item);
     } else if (groupBy === "assignee") {
       if (item.assignees.length === 0) add(NO_ASSIGNEE, item);

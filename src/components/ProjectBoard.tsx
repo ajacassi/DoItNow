@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ProjectDetail, ProjectItem } from "../lib/github";
+import type { Grouping, ProjectDetail, ProjectItem } from "../lib/github";
 import { groupItemsBy, groupColor, visibleGroupEntries } from "../lib/github";
 import { colorStyle } from "../lib/colors";
 import SubIssueProgress from "./SubIssueProgress";
@@ -8,8 +8,8 @@ import LabelChip from "./LabelChip";
 
 interface Props {
   project: ProjectDetail;
-  /** Optional secondary subdivision within each status column ("none", "assignee", "label", or `field:<name>`). */
-  subGroupBy: string;
+  /** The two grouping levels: the first picks the columns (status when "none" — it's a kanban), the second splits each column. */
+  grouping: Grouping;
   onOpenItem: (item: ProjectItem) => void;
   onNewIssueForStatus: (statusOptionId: string) => void;
   onMoveItem: (itemId: string, statusOptionId: string, statusName: string) => void;
@@ -81,12 +81,12 @@ function ItemCard({ item, onOpenItem }: { item: ProjectItem; onOpenItem: (item: 
   return body;
 }
 
-export default function ProjectBoard({ project, subGroupBy, onOpenItem, onNewIssueForStatus, onMoveItem }: Props) {
-  // The chosen subdivision (if any) becomes the outer, column-level grouping,
-  // with status always nested inside it — "Nessuno" means status stays the
-  // sole, outer grouping (and the only mode where drag-to-change-status
-  // still applies: a column only doubles as a drop target when it IS status).
-  const outerKey = subGroupBy === "none" ? "status" : subGroupBy;
+export default function ProjectBoard({ project, grouping, onOpenItem, onNewIssueForStatus, onMoveItem }: Props) {
+  // Columns follow the first grouping level (status when "none": a board is a
+  // kanban), cards inside each column the second. Drag-to-change-status works
+  // when the columns ARE status.
+  const outerKey = grouping.first === "none" ? "status" : grouping.first;
+  const innerKey = grouping.first === "none" ? "none" : grouping.second;
   const columns = groupItemsBy(project.items, project, outerKey);
   const optionId = outerKey === "status" ? new Map(project.statusOptions.map((o) => [o.name, o.id])) : new Map<string, string>();
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
@@ -96,7 +96,7 @@ export default function ProjectBoard({ project, subGroupBy, onOpenItem, onNewIss
       {Array.from(columns.entries()).map(([status, items]) => {
         const style = colorStyle(groupColor(project, outerKey, status));
         const targetOptionId = optionId.get(status);
-        const subgroups = outerKey !== "status" ? visibleGroupEntries(groupItemsBy(items, project, "status"), false) : null;
+        const subgroups = innerKey !== "none" ? visibleGroupEntries(groupItemsBy(items, project, innerKey), false) : null;
         const isDragOver = dragOverStatus === status;
         return (
           <div

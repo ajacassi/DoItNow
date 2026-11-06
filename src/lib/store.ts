@@ -1,6 +1,7 @@
 import { load, type Store } from "@tauri-apps/plugin-store";
 import { invoke } from "@tauri-apps/api/core";
 import type { SortKey } from "./sort";
+import type { Grouping } from "./github";
 import type { PriorityConfig } from "./priority";
 import type { Phase } from "./phases";
 
@@ -214,19 +215,21 @@ export async function setSortKeys(projectId: string, keys: SortKey[]): Promise<v
   await store.save();
 }
 
-// Optional secondary subdivision within each status group in Table/Board/
-// Gantt ("none", "assignee", "label", or `field:<name>`) — status itself is
-// always the outer grouping. Shared across views of a project, like columns,
-// status order and sort.
-export async function getSubGroupBy(projectId: string): Promise<string> {
+// Two-level grouping for Table/Gantt (replaces the old "status, then optional
+// subdivision" setting). Converted from it when missing: "none" meant status
+// only, any other subdivision X meant X › status.
+export async function getGrouping(projectId: string): Promise<Grouping> {
   const store = await getStore();
-  const data = await store.get<string>(`sub_group_by_${projectId}`);
-  return data ?? "none";
+  const saved = await store.get<Grouping>(`grouping_${projectId}`);
+  if (saved && typeof saved.first === "string" && typeof saved.second === "string") return saved;
+  const legacy = await store.get<string>(`sub_group_by_${projectId}`);
+  if (legacy && legacy !== "none") return { first: legacy, second: "status" };
+  return { first: "status", second: "none" };
 }
 
-export async function setSubGroupBy(projectId: string, key: string): Promise<void> {
+export async function setGrouping(projectId: string, grouping: Grouping): Promise<void> {
   const store = await getStore();
-  await store.set(`sub_group_by_${projectId}`, key);
+  await store.set(`grouping_${projectId}`, grouping);
   await store.save();
 }
 

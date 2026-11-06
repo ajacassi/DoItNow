@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ProjectDetail, ProjectField, ProjectItem, ItemFieldValue, IssueRef, SubIssueRow, SubIssueSummary } from "../lib/github";
+import type { Grouping, ProjectDetail, ProjectField, ProjectItem, ItemFieldValue, IssueRef, SubIssueRow, SubIssueSummary } from "../lib/github";
 import {
   groupItemsBy,
   visibleGroupEntries,
@@ -8,6 +8,7 @@ import {
   activeBlockers,
   activeBlocking,
   NO_STATUS,
+  ALL_GROUP,
 } from "../lib/github";
 import { colorStyle } from "../lib/colors";
 import {
@@ -20,6 +21,7 @@ import {
   BLOCKED_BY_COLUMN,
   BLOCKING_COLUMN,
   PRIORITY_SCORE_COLUMN,
+  STATUS_COLUMN,
   availableColumns,
 } from "../lib/columns";
 import { sortItems, type SortKey } from "../lib/sort";
@@ -32,8 +34,8 @@ interface Props {
   token: string;
   project: ProjectDetail;
   columns: string[];
-  /** Optional secondary subdivision within each status group ("none", "assignee", "label", or `field:<name>`). */
-  subGroupBy: string;
+  /** Two free grouping levels ("none" first = one flat list). */
+  grouping: Grouping;
   reversed: boolean;
   sortKeys: SortKey[];
   /** Priority score per project item id; items excluded from the ranking are absent. */
@@ -310,6 +312,72 @@ function ScoreCell({ scored }: { scored: ScoredItem | undefined }) {
   );
 }
 
+/** The item's status as a pill; click it to pick another status (works with any grouping, no drag needed). */
+function StatusCell({
+  item,
+  project,
+  onMoveItem,
+}: {
+  item: ProjectItem;
+  project: ProjectDetail;
+  onMoveItem: (itemId: string, statusOptionId: string, statusName: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ left: number; top: number } | null>(null);
+  const style = colorStyle(groupColor(project, "status", item.status));
+  const canChange = !!project.statusFieldId;
+  return (
+    <>
+      <button
+        onClick={(e) => {
+          if (!canChange) return;
+          const r = e.currentTarget.getBoundingClientRect();
+          // Fixed-position menu: the table rows clip overflow, and the menu must not be cut off at the bottom.
+          setMenuPos({ left: r.left, top: Math.min(r.bottom + 4, window.innerHeight - 8 - Math.min(320, project.statusOptions.length * 28 + 8)) });
+          setOpen(true);
+        }}
+        title={canChange ? "Clicca per cambiare stato" : item.status}
+        className={`inline-flex max-w-full items-center gap-1 truncate rounded-full border px-2 py-0.5 text-[11px] font-medium ${style.bg} ${style.text} ${style.border} ${
+          canChange ? "hover:brightness-110" : "cursor-default"
+        }`}
+      >
+        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`} />
+        <span className="truncate">{item.status}</span>
+      </button>
+      {open && menuPos && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div
+            className="fixed z-50 max-h-80 w-52 overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 p-1 shadow-xl"
+            style={{ left: Math.min(menuPos.left, window.innerWidth - 216), top: menuPos.top }}
+          >
+            {project.statusOptions
+              .filter((o) => o.id)
+              .map((o) => {
+                const st = colorStyle(o.color);
+                const current = o.name === item.status;
+                return (
+                  <button
+                    key={o.id}
+                    onClick={() => {
+                      setOpen(false);
+                      if (!current) onMoveItem(item.id, o.id, o.name);
+                    }}
+                    className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs ${current ? "bg-neutral-800" : "hover:bg-neutral-800"}`}
+                  >
+                    <span className={`h-2 w-2 shrink-0 rounded-full ${st.dot}`} />
+                    <span className="truncate text-neutral-200">{o.name}</span>
+                    {current && <span className="ml-auto text-neutral-500">✓</span>}
+                  </button>
+                );
+              })}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 function DateCell({ iso }: { iso: string | null }) {
   if (!iso) return <span className="text-neutral-700">—</span>;
   return <span className="text-xs text-neutral-300">{new Date(iso).toLocaleDateString("it-IT")}</span>;
@@ -361,7 +429,7 @@ export default function ProjectTable({
   token,
   project,
   columns: visibleColumns,
-  subGroupBy,
+  grouping,
   reversed,
   sortKeys,
   priorityScores,
@@ -371,17 +439,15 @@ export default function ProjectTable({
   onMoveItem,
 }: Props) {
   const scoreById = new Map([...priorityScores].map(([id, s]) => [id, s.score]));
-  // The chosen subdivision (if any) becomes the outer grouping, with status
-  // always nested inside it — "Nessuno" means status stays the sole, outer
-  // grouping, exactly like before this feature existed.
-  const outerKey = subGroupBy === "none" ? "status" : subGroupBy;
-  // "Inverti" always reverses the STATUS order, wherever status ends up —
-  // outer (no subdivision) or nested inside each subgroup — never the
-  // subdivision's own order.
+  // Two free grouping levels. "none" as the first level = one flat list, so
+  // a row never jumps to another group when its status changes. "Inverti"
+  // reverses the STATUS order, at whichever level status is.
+  const outerKey = grouping.first;
+  const innerKey = grouping.first === "none" ? "none" : grouping.second;
   const outerGroups = visibleGroupEntries(groupItemsBy(project.items, project, outerKey), outerKey === "status" && reversed).map(
     ([name, items]) => [name, sortItems(items, project, sortKeys, scoreById)] as const,
   );
-  const optionId = outerKey === "status" ? new Map(project.statusOptions.map((o) => [o.name, o.id])) : new Map<string, string>();
+  const optionId = new Map(project.statusOptions.map((o) => [o.name, o.id]));
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
 
@@ -573,7 +639,9 @@ export default function ProjectTable({
             />
             {visibleColumns.map((key) => (
               <div key={key} className="min-w-0 px-3 py-2">
-                {key === PRIORITY_SCORE_COLUMN ? (
+                {key === STATUS_COLUMN ? (
+                  <StatusCell item={item} project={project} onMoveItem={onMoveItem} />
+                ) : key === PRIORITY_SCORE_COLUMN ? (
                   <ScoreCell scored={priorityScores.get(item.id)} />
                 ) : key === ASSIGNEE_COLUMN ? (
                   <AssigneeCell item={item} />
@@ -610,52 +678,63 @@ export default function ProjectTable({
     );
   }
 
+  /** Drop target props for a group whose items all share one status (drag a row there to move it). */
+  function statusDropProps(dropKey: string, statusName: string | null) {
+    const targetOptionId = statusName ? optionId.get(statusName) : undefined;
+    if (!targetOptionId || !statusName) return {};
+    return {
+      onDragOver: (e: React.DragEvent) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        setDragOverStatus(dropKey);
+      },
+      onDragLeave: () => setDragOverStatus((s) => (s === dropKey ? null : s)),
+      onDrop: (e: React.DragEvent) => {
+        e.preventDefault();
+        setDragOverStatus(null);
+        const itemId = e.dataTransfer.getData(DRAG_MIME);
+        if (itemId) onMoveItem(itemId, targetOptionId, statusName);
+      },
+    };
+  }
+
   return (
     <div className="h-full overflow-y-auto px-8 py-6">
       <div className="space-y-6">
-        {outerGroups.map(([status, items]) => {
-          const style = colorStyle(groupColor(project, outerKey, status));
-          const isCollapsed = collapsed[status];
-          const targetOptionId = optionId.get(status);
-          const isDragOver = dragOverStatus === status;
-          const subgroups = outerKey !== "status" ? visibleGroupEntries(groupItemsBy(items, project, "status"), reversed) : null;
-          // When subdivided, box each outer group so it's obvious at a glance
-          // where one ends and the next begins — a faint, alternating tint,
-          // not a loud border.
-          const grouped = outerKey !== "status";
-          const groupBox = grouped ? "border border-neutral-700/80 bg-neutral-800/40 px-3 py-2.5" : "";
+        {outerGroups.map(([name, items]) => {
+          // Flat list: no header, no box — just the rows.
+          if (outerKey === "none" && name === ALL_GROUP) {
+            return <ItemsGrid key={name} items={items} />;
+          }
+          const style = colorStyle(groupColor(project, outerKey, name));
+          const isCollapsed = collapsed[name];
+          const outerStatus = outerKey === "status" ? name : null;
+          const newIssueOptionId = outerStatus ? optionId.get(outerStatus) : undefined;
+          const isDragOver = dragOverStatus === name;
+          const subgroups = innerKey !== "none" ? visibleGroupEntries(groupItemsBy(items, project, innerKey), innerKey === "status" && reversed) : null;
+          // With a second level, box each outer group so it's obvious at a
+          // glance where one ends and the next begins — a faint tint, not a loud border.
+          const groupBox = subgroups ? "border border-neutral-700/80 bg-neutral-800/40 px-3 py-2.5" : "";
 
           return (
             <div
-              key={status}
-              onDragOver={(e) => {
-                if (!targetOptionId) return;
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-                setDragOverStatus(status);
-              }}
-              onDragLeave={() => setDragOverStatus((s) => (s === status ? null : s))}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragOverStatus(null);
-                const itemId = e.dataTransfer.getData(DRAG_MIME);
-                if (itemId && targetOptionId) onMoveItem(itemId, targetOptionId, status);
-              }}
+              key={name}
+              {...statusDropProps(name, outerStatus)}
               className={`rounded-lg transition ${isDragOver ? "ring-2 ring-indigo-500" : ""} ${groupBox}`}
             >
               <div className="flex items-center gap-2 py-2">
-                <button onClick={() => toggle(status)} className="flex items-center gap-2 text-left">
+                <button onClick={() => toggle(name)} className="flex items-center gap-2 text-left">
                   <ChevronIcon open={!isCollapsed} />
                   <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${style.bg} ${style.text} ${style.border}`}>
                     <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
-                    {status}
+                    {name}
                   </span>
                   <span className="text-xs text-neutral-600">{items.length}</span>
                 </button>
-                {targetOptionId && (
+                {newIssueOptionId && (
                   <button
-                    onClick={() => onNewIssueForStatus(targetOptionId)}
-                    title={`Nuova issue in ${status}`}
+                    onClick={() => onNewIssueForStatus(newIssueOptionId)}
+                    title={`Nuova issue in ${name}`}
                     className="text-neutral-600 hover:text-neutral-300"
                   >
                     +
@@ -667,20 +746,37 @@ export default function ProjectTable({
                 subgroups ? (
                   <div className="space-y-3 pl-2">
                     {subgroups.map(([subName, subItems]) => {
-                      const subKey = `${status}::${subName}`;
-                      const subStyle = colorStyle(groupColor(project, "status", subName));
+                      const subKey = `${name}::${subName}`;
+                      const subStyle = colorStyle(groupColor(project, innerKey, subName));
                       const subCollapsed = collapsed[subKey];
+                      const subStatus = innerKey === "status" ? subName : null;
+                      const subNewOptionId = subStatus ? optionId.get(subStatus) : undefined;
                       return (
-                        <div key={subKey}>
-                          <button onClick={() => toggle(subKey)} className="mb-1.5 flex items-center gap-1.5 text-left">
-                            <ChevronIcon open={!subCollapsed} />
-                            <span
-                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${subStyle.bg} ${subStyle.text} ${subStyle.border}`}
-                            >
-                              {subName}
-                            </span>
-                            <span className="text-xs text-neutral-600">{subItems.length}</span>
-                          </button>
+                        <div
+                          key={subKey}
+                          {...statusDropProps(subKey, subStatus)}
+                          className={`rounded-lg transition ${dragOverStatus === subKey ? "ring-2 ring-indigo-500" : ""}`}
+                        >
+                          <div className="mb-1.5 flex items-center gap-2">
+                            <button onClick={() => toggle(subKey)} className="flex items-center gap-1.5 text-left">
+                              <ChevronIcon open={!subCollapsed} />
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${subStyle.bg} ${subStyle.text} ${subStyle.border}`}
+                              >
+                                {subName}
+                              </span>
+                              <span className="text-xs text-neutral-600">{subItems.length}</span>
+                            </button>
+                            {subNewOptionId && (
+                              <button
+                                onClick={() => onNewIssueForStatus(subNewOptionId)}
+                                title={`Nuova issue in ${subName}`}
+                                className="text-neutral-600 hover:text-neutral-300"
+                              >
+                                +
+                              </button>
+                            )}
+                          </div>
                           {!subCollapsed && <ItemsGrid items={subItems} />}
                         </div>
                       );
