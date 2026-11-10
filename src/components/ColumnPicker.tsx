@@ -5,10 +5,12 @@ import { availableColumns } from "../lib/columns";
 interface Props {
   project: ProjectDetail;
   selected: Set<string>;
+  /** Columns hidden because the active grouping already shows them (still toggle-able, just not displayed). */
+  hidden?: Set<string>;
   onToggle: (key: string) => void;
 }
 
-export default function ColumnPicker({ project, selected, onToggle }: Props) {
+export default function ColumnPicker({ project, selected, hidden, onToggle }: Props) {
   const [open, setOpen] = useState(false);
   const options = availableColumns(project);
 
@@ -26,15 +28,20 @@ export default function ColumnPicker({ project, selected, onToggle }: Props) {
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute left-0 z-20 mt-1 w-56 rounded-lg border border-neutral-700 bg-neutral-900 p-1.5 shadow-xl">
-            {options.map((o) => (
-              <label
-                key={o.key}
-                className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-neutral-200 hover:bg-neutral-800"
-              >
-                <input type="checkbox" checked={selected.has(o.key)} onChange={() => onToggle(o.key)} className="accent-indigo-600" />
-                <span className="truncate">{o.label}</span>
-              </label>
-            ))}
+            {options.map((o) => {
+              const grouped = hidden?.has(o.key) ?? false;
+              return (
+                <label
+                  key={o.key}
+                  title={grouped ? "Nascosta perché usata come raggruppamento" : undefined}
+                  className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-neutral-200 hover:bg-neutral-800"
+                >
+                  <input type="checkbox" checked={selected.has(o.key)} onChange={() => onToggle(o.key)} className="accent-indigo-600" />
+                  <span className="truncate">{o.label}</span>
+                  {grouped && <span className="ml-auto shrink-0 text-xs text-subtle">raggruppata</span>}
+                </label>
+              );
+            })}
             {options.length === 0 && <p className="px-2 py-1.5 text-xs text-subtle">Nessun campo disponibile.</p>}
           </div>
         </>

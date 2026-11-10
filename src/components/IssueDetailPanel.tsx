@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowUpRight, X } from "lucide-react";
 import {
   fetchIssueDetail,
@@ -72,6 +72,21 @@ export default function IssueDetailPanel({
   onOpenIssue,
 }: Props) {
   const dialogRef = useDialog(onClose);
+  // The title is a one-row textarea that grows with its content, so a long
+  // title is shown in full instead of needing an inner scroll.
+  const titleRef = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    const fit = () => {
+      el.style.height = "auto";
+      el.style.height = `${el.scrollHeight}px`;
+    };
+    fit();
+    // The panel can be resized with the window, which changes the wrapping.
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  });
   const [detail, setDetail] = useState<IssueDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -429,6 +444,7 @@ export default function IssueDetailPanel({
             )}
 
             <textarea
+              ref={titleRef}
               value={titleDraft}
               onChange={(e) => setTitleDraft(e.target.value)}
               onBlur={commitTitle}

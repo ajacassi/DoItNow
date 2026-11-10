@@ -27,7 +27,7 @@ import {
 } from "../lib/store";
 import { defaultPriorityConfig, normalizeConfig, scoreItems, type PriorityConfig, type ScoredItem } from "../lib/priority";
 import { uniqueViewName, type SharedView } from "../lib/priorityShare";
-import { defaultColumns, orderColumns, STATUS_COLUMN } from "../lib/columns";
+import { defaultColumns, groupedColumns, orderColumns, STATUS_COLUMN } from "../lib/columns";
 import type { SortKey } from "../lib/sort";
 import ProjectTable from "./ProjectTable";
 import ProjectBoard from "./ProjectBoard";
@@ -174,6 +174,11 @@ export default function ProjectView({
     setGroupingState(DEFAULT_GROUPING);
     getGrouping(project.id).then(setGroupingState);
   }, [project.id]);
+
+  // Columns the active grouping already shows (Table only): hidden from the
+  // table without touching the saved column choice, so they come back as soon
+  // as the grouping is removed.
+  const groupHiddenColumns = useMemo(() => groupedColumns(grouping), [grouping]);
 
   function changeGrouping(next: Grouping) {
     setGroupingState(next);
@@ -545,7 +550,7 @@ export default function ProjectView({
             Tutti i repo
           </button>
           {view !== "priority" && view !== "analytics" && <span className="mx-1 h-5 w-px shrink-0 bg-neutral-800" aria-hidden />}
-          {view === "table" && <ColumnPicker project={project} selected={visibleColumns} onToggle={toggleColumn} />}
+          {view === "table" && <ColumnPicker project={project} selected={visibleColumns} hidden={groupHiddenColumns} onToggle={toggleColumn} />}
           {view === "table" && <SortPicker project={project} sortKeys={sortKeys} onChange={changeSortKeys} />}
           {view !== "priority" && view !== "analytics" && <GroupByPicker project={project} value={grouping} onChange={changeGrouping} />}
           {(view === "table" || view === "gantt") && groupingHasStatus(grouping) && (
@@ -606,7 +611,7 @@ export default function ProjectView({
             <ProjectTable
               token={token}
               project={visibleProject}
-              columns={orderColumns(project, visibleColumns)}
+              columns={orderColumns(project, visibleColumns, groupHiddenColumns)}
               grouping={grouping}
               reversed={statusOrderReversed}
               sortKeys={sortKeys}

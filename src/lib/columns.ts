@@ -1,4 +1,4 @@
-import type { ProjectDetail } from "./github";
+import type { Grouping, ProjectDetail } from "./github";
 
 export const ASSIGNEE_COLUMN = "assignee";
 export const AUTHOR_COLUMN = "author";
@@ -86,8 +86,26 @@ export function defaultColumns(project: ProjectDetail): string[] {
   return [ASSIGNEE_COLUMN, dateField?.key, priorityField?.key].filter((x): x is string => Boolean(x));
 }
 
-export function orderColumns(project: ProjectDetail, selected: Set<string>): string[] {
+/**
+ * Columns made redundant by the active grouping (either level): grouping by
+ * status already says each row's status, so the Stato column is dropped, and
+ * so on. Labels have no column, so nothing to drop for them.
+ */
+export function groupedColumns(grouping: Grouping): Set<string> {
+  const keys = new Set<string>();
+  const levels = grouping.first === "none" ? [] : [grouping.first, grouping.second];
+  for (const g of levels) {
+    if (g === "status") keys.add(STATUS_COLUMN);
+    else if (g === "assignee") keys.add(ASSIGNEE_COLUMN);
+    else if (g === "author") keys.add(AUTHOR_COLUMN);
+    else if (g.startsWith("field:")) keys.add(g.slice("field:".length));
+  }
+  return keys;
+}
+
+/** Selected columns in canonical order, minus the ones the grouping already shows (`hidden`). */
+export function orderColumns(project: ProjectDetail, selected: Set<string>, hidden?: Set<string>): string[] {
   return availableColumns(project)
     .map((o) => o.key)
-    .filter((key) => selected.has(key));
+    .filter((key) => selected.has(key) && !hidden?.has(key));
 }

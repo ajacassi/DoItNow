@@ -228,11 +228,11 @@ function NameCell({
       ) : null}
       {item.number != null && <span className="shrink-0 text-xs tabular-nums text-neutral-500">#{item.number}</span>}
       {canOpenDetail ? (
-        <button onClick={() => onOpenItem(item)} className="min-w-0 truncate text-left text-sm text-neutral-100 hover:underline">
+        <button onClick={() => onOpenItem(item)} title={item.title} className="min-w-0 truncate text-left text-sm text-neutral-100 hover:underline">
           {item.title}
         </button>
       ) : (
-        <span className="min-w-0 truncate text-sm text-neutral-100">{item.title}</span>
+        <span title={item.title} className="min-w-0 truncate text-sm text-neutral-100">{item.title}</span>
       )}
       {item.labels.map((l) => (
         <LabelChip key={l.name} name={l.name} color={l.color} />
@@ -557,6 +557,7 @@ export default function ProjectTable({
             <span className="shrink-0 text-xs tabular-nums text-neutral-500">#{row.number}</span>
             <button
               onClick={() => onOpenIssue({ repositoryOwner: row.repositoryOwner, repository: row.repository, number: row.number })}
+              title={row.title}
               className={`min-w-0 truncate text-left text-sm hover:underline ${row.state === "CLOSED" ? "text-neutral-500 line-through" : "text-neutral-200"}`}
             >
               {row.title}
